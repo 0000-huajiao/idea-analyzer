@@ -457,7 +457,8 @@ def sanitize_mermaid(code: str) -> str:
     return re.sub(r"\|([^|\"'<>\n]+)\|", q, code)
 
 def render_mermaid(code: str, height: int = 430):
-    code = sanitize_mermaid(code.strip())
+    code = re.sub(r"```[a-z]*\n?", "", code).strip()  # 剥掉 AI 可能附带的代码围栏
+    code = sanitize_mermaid(code)
     if not code:
         return
     uid     = abs(hash(code)) % 99999
