@@ -22,6 +22,244 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ─── Global CSS ───────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+/* ── Base ────────────────────────────────────────────────────────── */
+.stApp {
+    background: #f5f4ff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+                 'Microsoft YaHei', sans-serif;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+section[data-testid="stSidebar"] {
+    background: linear-gradient(160deg, #1a1040 0%, #2d1b69 55%, #1e3a5f 100%) !important;
+    border-right: none !important;
+}
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] .stCaption,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] span {
+    color: #c4b5fd !important;
+}
+section[data-testid="stSidebar"] h1 {
+    color: #fff !important;
+    font-size: 1.25rem !important;
+    letter-spacing: -0.3px !important;
+}
+section[data-testid="stSidebar"] input {
+    background: rgba(255,255,255,0.10) !important;
+    border: 1px solid rgba(196,181,253,0.35) !important;
+    border-radius: 8px !important;
+    color: #fff !important;
+}
+section[data-testid="stSidebar"] [data-testid="stAlert"] {
+    background: rgba(16,185,129,0.15) !important;
+    border: 1px solid rgba(16,185,129,0.30) !important;
+    border-radius: 10px !important;
+}
+section[data-testid="stSidebar"] [data-testid="stAlert"] p {
+    color: #6ee7b7 !important;
+}
+section[data-testid="stSidebar"] [data-baseweb="notification"] p {
+    color: #fcd34d !important;
+}
+
+/* ── Primary button ──────────────────────────────────────────────── */
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #5b4cf5 0%, #7c3aed 100%) !important;
+    border: none !important;
+    border-radius: 10px !important;
+    color: #fff !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.2px !important;
+    box-shadow: 0 3px 14px rgba(91,76,245,0.38) !important;
+    transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+}
+.stButton > button[kind="primary"]:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 7px 22px rgba(91,76,245,0.46) !important;
+}
+.stButton > button[kind="primary"]:active {
+    transform: translateY(0px) !important;
+}
+
+/* ── Secondary / default button ─────────────────────────────────── */
+.stButton > button[kind="secondary"],
+.stButton > button:not([kind="primary"]) {
+    background: #fff !important;
+    border: 1.5px solid #ddd6fe !important;
+    border-radius: 10px !important;
+    color: #5b4cf5 !important;
+    font-weight: 500 !important;
+    transition: background 0.18s, border-color 0.18s, color 0.18s !important;
+}
+.stButton > button[kind="secondary"]:hover,
+.stButton > button:not([kind="primary"]):hover {
+    background: #f5f3ff !important;
+    border-color: #5b4cf5 !important;
+}
+
+/* ── Download button ─────────────────────────────────────────────── */
+[data-testid="stDownloadButton"] > button {
+    border-radius: 10px !important;
+    font-weight: 500 !important;
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {
+    background: #ede9fe !important;
+    border-radius: 12px !important;
+    padding: 4px !important;
+    gap: 2px !important;
+    border-bottom: none !important;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 9px !important;
+    font-weight: 500 !important;
+    color: #7c3aed !important;
+    border: none !important;
+    padding: 6px 14px !important;
+    transition: background 0.18s, box-shadow 0.18s !important;
+}
+.stTabs [aria-selected="true"] {
+    background: #fff !important;
+    color: #5b4cf5 !important;
+    font-weight: 700 !important;
+    box-shadow: 0 1px 8px rgba(91,76,245,0.18) !important;
+}
+
+/* ── Progress bar ────────────────────────────────────────────────── */
+.stProgress > div > div > div > div {
+    background: linear-gradient(90deg, #5b4cf5 0%, #06b6d4 100%) !important;
+    border-radius: 999px !important;
+}
+
+/* ── Metric widget ───────────────────────────────────────────────── */
+[data-testid="stMetric"] {
+    background: #fff;
+    border-radius: 14px !important;
+    padding: 14px 18px !important;
+    border: 1.5px solid #ede9fe !important;
+    box-shadow: 0 2px 10px rgba(91,76,245,0.07) !important;
+}
+[data-testid="stMetricValue"] {
+    font-size: 1.9rem !important;
+    font-weight: 800 !important;
+    color: #5b4cf5 !important;
+}
+[data-testid="stMetricLabel"] {
+    color: #7c3aed !important;
+    font-weight: 600 !important;
+    font-size: 0.78rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.6px !important;
+}
+
+/* ── Alert / notification ────────────────────────────────────────── */
+[data-testid="stAlert"] {
+    border-radius: 12px !important;
+    border: none !important;
+}
+
+/* ── Chat messages ───────────────────────────────────────────────── */
+[data-testid="stChatMessage"] {
+    border-radius: 14px !important;
+    margin-bottom: 6px !important;
+}
+
+/* ── Chat input ──────────────────────────────────────────────────── */
+[data-testid="stChatInput"] textarea {
+    border-radius: 12px !important;
+}
+[data-testid="stChatInput"] > div {
+    border-radius: 14px !important;
+    border: 2px solid #ddd6fe !important;
+    background: #fff !important;
+    box-shadow: 0 2px 12px rgba(91,76,245,0.08) !important;
+}
+[data-testid="stChatInput"] > div:focus-within {
+    border-color: #5b4cf5 !important;
+    box-shadow: 0 0 0 3px rgba(91,76,245,0.13) !important;
+}
+
+/* ── Text input / textarea ───────────────────────────────────────── */
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea {
+    border-radius: 10px !important;
+    border: 1.5px solid #e5e7eb !important;
+    transition: border-color 0.18s, box-shadow 0.18s !important;
+}
+[data-testid="stTextInput"] input:focus,
+[data-testid="stTextArea"] textarea:focus {
+    border-color: #5b4cf5 !important;
+    box-shadow: 0 0 0 3px rgba(91,76,245,0.12) !important;
+}
+
+/* ── Containers with border ──────────────────────────────────────── */
+[data-testid="stVerticalBlockBorderWrapper"] > div {
+    border-radius: 14px !important;
+    border: 1.5px solid #ede9fe !important;
+    box-shadow: 0 2px 8px rgba(91,76,245,0.05) !important;
+}
+
+/* ── Divider ─────────────────────────────────────────────────────── */
+hr {
+    border-color: #ddd6fe !important;
+    margin: 10px 0 !important;
+}
+
+/* ── Headings ────────────────────────────────────────────────────── */
+h1 {
+    background: linear-gradient(135deg, #5b4cf5 20%, #7c3aed 80%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 900 !important;
+    letter-spacing: -0.8px !important;
+}
+h2 { color: #2d1b69 !important; font-weight: 700 !important; }
+h3 { color: #4c1d95 !important; font-weight: 600 !important; }
+
+/* ── Expander ────────────────────────────────────────────────────── */
+[data-testid="stExpander"] {
+    border-radius: 10px !important;
+    border: 1.5px solid #ede9fe !important;
+}
+
+/* ── Code block ──────────────────────────────────────────────────── */
+[data-testid="stCodeBlock"] {
+    border-radius: 12px !important;
+}
+
+/* ── Selectbox / Checkbox ────────────────────────────────────────── */
+[data-testid="stCheckbox"] label {
+    font-weight: 500;
+}
+
+/* ── Caption ─────────────────────────────────────────────────────── */
+.stCaption, [data-testid="stCaptionContainer"] p {
+    color: #9c86e8 !important;
+}
+
+/* ── Form submit button ──────────────────────────────────────────── */
+[data-testid="stFormSubmitButton"] > button {
+    background: linear-gradient(135deg, #5b4cf5 0%, #7c3aed 100%) !important;
+    border: none !important;
+    border-radius: 10px !important;
+    color: #fff !important;
+    font-weight: 600 !important;
+    box-shadow: 0 3px 14px rgba(91,76,245,0.38) !important;
+    transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+}
+[data-testid="stFormSubmitButton"] > button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 7px 22px rgba(91,76,245,0.46) !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ─── Sidebar: API 配置 ────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("⚙️ API 配置")
