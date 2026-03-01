@@ -349,16 +349,47 @@ COMPETITOR_PROMPT = """你是一位市场研究专家。根据产品PRD分析竞
   "feasibility": {"score": 1到10整数, "rationale": "可行性理由", "recommendations": ["行动建议"]}
 }"""
 
-WIREFRAME_PROMPT = """你是一位UI/UX设计师，根据PRD（含页面风格与配色）为每个核心页面生成ASCII线框图原型。
+WIREFRAME_PROMPT = """你是一位资深 UI/UX 设计师兼产品开发规格专家，根据 PRD 输出一份完整的「开发规格文档」，包含以下三部分，直接可以作为 AI 开发助手（Cursor / Claude / GPT-4）的输入。
 
-要求：
-- 用 +--+  |  [ ]  ( )  等ASCII字符表示UI元素（导航栏、按钮、输入框、卡片、列表、图片占位符等）
-- 每个核心页面独立输出，标注页面名称
-- 在线框图下方用1-2句说明该页面的核心交互逻辑
-- 结合 ui_style 中的风格和配色，在备注里标注建议色值/风格要点
-- 输出所有核心页面，不要遗漏主流程中的关键页面
+════════════════════════════════════
+## 一、核心页面 ASCII 线框图
+════════════════════════════════════
+为每个核心页面绘制 ASCII 线框图：
+- 使用 +--+  |  [ ]  ( )  ###  ~~~  等字符表示 UI 元素（导航栏/按钮/输入框/卡片/列表/图片占位符等）
+- 每个页面标注名称，线框图下方注明 1-2 句交互说明
+- 结合 ui_style 中的风格与配色，在每张线框图旁注明色彩/字体建议
+- 覆盖所有主流程的核心页面，不遗漏
 
-只输出线框图文本，不含JSON，格式清晰易读。"""
+════════════════════════════════════
+## 二、业务流程泳道图（ASCII）
+════════════════════════════════════
+用 ASCII 泳道图展示核心业务主流程，各列代表不同角色（如：用户 / 前端 / 后端 / 第三方服务），各行代表操作步骤：
+
+示例格式：
+┌─────────────┬─────────────────────┬─────────────────────┬────────────────┐
+│    用户      │       前端           │       后端           │  第三方服务    │
+├─────────────┼─────────────────────┼─────────────────────┼────────────────┤
+│ 点击登录     │ 显示登录表单         │                     │                │
+│ 填写账号密码  │ 格式校验             │                     │                │
+│             │ POST /api/login ──► │ 验证账号密码         │                │
+│             │                     │ ──► 签发 JWT Token  │                │
+│ 进入主界面   │ ◄── 返回 Token      │                     │                │
+└─────────────┴─────────────────────┴─────────────────────┴────────────────┘
+
+根据产品实际角色和流程绘制，确保泳道清晰准确。
+
+════════════════════════════════════
+## 三、功能详细开发规格
+════════════════════════════════════
+为每个核心功能模块输出详细规格，包含：
+- 功能概述（1-2句）
+- 建议技术实现（技术栈/核心接口路径/关键数据结构）
+- 交互细节与边界条件
+- 异常处理与降级策略
+
+格式清晰，措辞精确，可直接作为 AI 开发提示词。
+
+只输出文档正文，不含JSON，不含多余解释。"""
 
 TEST_CASE_PROMPT = """你是QA工程师。根据PRD生成测试用例。
 只输出合法 JSON：
@@ -1024,7 +1055,7 @@ def render_progress_panel(idea: dict):
         (has_prd,                               "📋 需求文档"),
         (bool(idea.get("flowchart")),           "🗺️ 流程图"),
         (bool(idea.get("competitor_analysis")), "🔍 竞品分析"),
-        (bool(idea.get("ai_prompt")),           "🎨 ASCII原型图"),
+        (bool(idea.get("ai_prompt")),           "📐 开发规格文档"),
         (bool(idea.get("test_cases")),          "🧪 测试用例"),
     ]:
         st.markdown(f"{'✅' if done else '⭕'} {label}")
@@ -1110,7 +1141,7 @@ def _workspace_product(idea: dict):
 
     with right:
         tab_prd, tab_flow, tab_comp, tab_wire, tab_test = st.tabs(
-            ["📋 需求文档", "🗺️ 流程图", "🔍 竞品分析", "🎨 ASCII原型图", "🧪 测试用例"]
+            ["📋 需求文档", "🗺️ 流程图", "🔍 竞品分析", "📐 开发规格", "🧪 测试用例"]
         )
 
         with tab_prd:
@@ -1194,11 +1225,12 @@ def _workspace_product(idea: dict):
             st.markdown(competitor_to_md(idea.get("competitor_analysis", {})))
 
         with tab_wire:
-            if st.button("🎨 生成ASCII原型图", type="primary", use_container_width=True):
+            st.caption("包含：ASCII页面线框图 · 业务流程泳道图 · 功能详细开发规格，可直接喂给 AI 构建产品")
+            if st.button("📐 生成完整开发规格文档", type="primary", use_container_width=True):
                 st.session_state.prompt_loading = True
                 st.rerun()
             if st.session_state.prompt_loading:
-                with st.spinner("AI正在绘制ASCII原型图（可能需要30-60秒）..."):
+                with st.spinner("AI 正在生成开发规格文档（线框图 + 泳道图 + 功能规格，约60秒）..."):
                     wf = gen_wireframe(idea)
                     if wf:
                         idea["ai_prompt"] = wf
@@ -1206,12 +1238,12 @@ def _workspace_product(idea: dict):
                 st.session_state.prompt_loading = False
                 st.rerun()
             if idea.get("ai_prompt"):
-                st.download_button("📥 下载原型图文件", data=idea["ai_prompt"],
-                                   file_name=f"{idea['title']}_原型图.txt",
+                st.download_button("📥 下载开发规格文档", data=idea["ai_prompt"],
+                                   file_name=f"{idea['title']}_开发规格.txt",
                                    mime="text/plain", use_container_width=True)
                 st.code(idea["ai_prompt"], language="text")
             else:
-                st.info("需求梳理完成后，点击上方按钮生成各核心页面的ASCII线框图，可直接喂给 AI 辅助还原视觉稿。")
+                st.info("需求梳理完成后点击上方按钮，AI 将生成包含 ASCII 线框图、业务泳道图和功能规格的完整开发文档。")
 
         with tab_test:
             if st.button("🧪 生成测试用例", type="primary", use_container_width=True):
@@ -1366,12 +1398,12 @@ def _render_milestone_banner(idea: dict, stages: list, is_lit: bool = False):
                 st.success("🎊 **基础需求梳理完成！三个阶段全部达成！**")
                 st.markdown(
                     "你已经把产品 **是什么、给谁用、怎么做** 都想清楚了！\n\n"
-                    "**现在可以生成 ASCII 原型图** —— 把视觉布局描述清楚，直接喂给 AI 快速还原界面！"
+                    "**现在可以生成完整开发规格文档** —— ASCII线框图 + 泳道图 + 功能规格，直接喂给 AI 开始构建！"
                 )
                 st.markdown("---")
                 ca, cb = st.columns(2)
                 with ca:
-                    if st.button("🎨 先生成ASCII原型图", type="primary", use_container_width=True,
+                    if st.button("📐 先生成开发规格文档", type="primary", use_container_width=True,
                                  key="prod_gen_prompt"):
                         st.session_state.new_milestone  = 0
                         st.session_state.stage3_choice  = "prompt"
@@ -1393,7 +1425,7 @@ def _chat_product(idea: dict):
     _render_milestone_banner(idea, GUIDED_STAGES, is_lit=False)
 
     if st.session_state.get("stage3_choice") == "prompt" and idea.get("ai_prompt"):
-        st.info("✅ ASCII原型图已生成！点击右侧「🎨 ASCII原型图」Tab 查看和下载。")
+        st.info("✅ 开发规格文档已生成！点击右侧「📐 开发规格」Tab 查看和下载。")
 
     st.markdown("---")
     _render_chat_history(idea)
