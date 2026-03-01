@@ -1,6 +1,6 @@
 """
 Idea 需求分析器（开源版）
-流式输出 · 三栏布局 · 三阶段引导 · 13模块PRD · 竞品分析 · AI开发Prompt · 测试用例
+流式输出 · 三栏布局 · 双模式（产品需求 / 文学创作）· 13模块PRD · 竞品分析 · AI开发Prompt · 测试用例
 数据存储在浏览器 Session，不写服务器文件。
 """
 
@@ -65,16 +65,18 @@ with st.sidebar:
 
     st.markdown("---")
     st.caption("💡 数据仅保存在当前浏览器 Session，刷新页面后清空")
-    st.caption("[📖 使用说明 & 源码](https://github.com/agentic-derek/idea-analyzer)")
+    st.caption("[📖 使用说明 & 源码](https://github.com/0000-huajiao/idea-analyzer)")
+
 
 def is_configured() -> bool:
     return bool(st.session_state.get("cfg_key") and st.session_state.get("cfg_base"))
+
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 MAX_RETRY     = 3
 HISTORY_LIMIT = 20
 
-# ─── PRD module definitions ───────────────────────────────────────────────────
+# ─── PRD module definitions (产品模式) ────────────────────────────────────────
 PRD_MODULES = [
     ("doc_info",          "文档基础信息"),
     ("background",        "需求背景与目标"),
@@ -111,7 +113,7 @@ EXPORT_HINTS = {
     "appendix":          "**名词解释：**\n\n**参考资料：**\n\n**Q&A：**",
 }
 
-# ─── 三阶段引导系统 ───────────────────────────────────────────────────────────
+# ─── 三阶段引导系统（产品模式）────────────────────────────────────────────────
 def field_filled(prd: dict, key: str) -> bool:
     val = prd.get(key)
     return len(val) > 0 if isinstance(val, list) else bool(val)
@@ -167,6 +169,83 @@ def get_stage_prompt(idea: dict) -> str:
         return GUIDED_STAGES[sid - 1]["prompt"]
     return "【深化阶段】前三阶段已完成！请继续深化：非功能需求、业务规则、上线计划等。completeness 可设为 75-100。"
 
+# ─── 五阶段引导系统（文学模式）────────────────────────────────────────────────
+def lit_field_filled(outline: dict, key: str) -> bool:
+    val = outline.get(key)
+    if isinstance(val, (list, dict)):
+        return len(val) > 0
+    return bool(val)
+
+LIT_STAGES = [
+    {
+        "id": 1, "emoji": "🌍", "title": "背景设定",
+        "desc": "世界观 · 故事类型 · 基调风格",
+        "check": lambda o, pct: pct >= 20 and (lit_field_filled(o, "world") or lit_field_filled(o, "genre")),
+        "prompt": (
+            "【当前引导阶段：第1阶段——背景设定】\n"
+            "请用2-3个问题了解：这是什么类型的故事？发生在什么背景下？整体风格基调是什么？\n"
+            "本阶段完成后 completeness 设为 20-35。"
+        ),
+    },
+    {
+        "id": 2, "emoji": "👤", "title": "人物塑造",
+        "desc": "主角 · 配角 · 人物弧光",
+        "check": lambda o, pct: pct >= 40 and lit_field_filled(o, "characters"),
+        "prompt": (
+            "【当前引导阶段：第2阶段——人物塑造】\n"
+            "请用2-3个问题了解：主角是谁？有什么性格特点？会经历什么成长或变化？有哪些重要配角？\n"
+            "本阶段完成后 completeness 设为 40-55。"
+        ),
+    },
+    {
+        "id": 3, "emoji": "⚡", "title": "冲突结构",
+        "desc": "核心冲突 · 故事结构 · 情节起伏",
+        "check": lambda o, pct: pct >= 60 and lit_field_filled(o, "conflict") and lit_field_filled(o, "plot"),
+        "prompt": (
+            "【当前引导阶段：第3阶段——冲突结构】\n"
+            "请用3-4个问题了解：主角面临的最大阻碍是什么？故事怎么开始？高潮在哪里？结局走向如何？\n"
+            "本阶段完成后 completeness 设为 60-75。"
+        ),
+    },
+    {
+        "id": 4, "emoji": "🗺️", "title": "写作计划",
+        "desc": "叙事视角 · 切入点 · 章节节奏",
+        "check": lambda o, pct: pct >= 75 and lit_field_filled(o, "writing_plan"),
+        "prompt": (
+            "【当前引导阶段：第4阶段——写作计划】\n"
+            "请用2-3个问题了解：从哪个角色的视角写？以什么事件作为开篇切入点？前几章大致怎么安排？\n"
+            "本阶段完成后 completeness 设为 75-85。"
+        ),
+    },
+    {
+        "id": 5, "emoji": "📚", "title": "参考资料",
+        "desc": "同类作品 · 创作灵感来源",
+        "check": lambda o, pct: pct >= 85 and lit_field_filled(o, "references"),
+        "prompt": (
+            "【当前引导阶段：第5阶段——参考资料】\n"
+            "推荐几部和这个故事风格、类型相近的作品，说明可以参考的地方。completeness 可设为 85-100。"
+        ),
+    },
+]
+
+def get_lit_completed_stages(idea: dict) -> list[int]:
+    outline = idea.get("outline", {})
+    pct     = idea.get("completeness", 0)
+    return [s["id"] for s in LIT_STAGES if s["check"](outline, pct)]
+
+def get_lit_current_stage(idea: dict) -> int:
+    completed = get_lit_completed_stages(idea)
+    for s in LIT_STAGES:
+        if s["id"] not in completed:
+            return s["id"]
+    return len(LIT_STAGES) + 1
+
+def get_lit_stage_prompt(idea: dict) -> str:
+    sid = get_lit_current_stage(idea)
+    if sid <= len(LIT_STAGES):
+        return LIT_STAGES[sid - 1]["prompt"]
+    return "【深化阶段】所有阶段已完成！请继续丰富细节，completeness 可设为 90-100。"
+
 # ─── System prompts ───────────────────────────────────────────────────────────
 MAIN_PROMPT = """你是一位资深产品经理，专门帮助非专业用户用大白话梳理产品需求。
 
@@ -210,6 +289,51 @@ flowchart TD
     D --> E --> F["核心操作"] --> G(["完成"])
 """
 
+LIT_PROMPT = """你是一位经验丰富的故事编辑和创作顾问，专门帮助创作者梳理故事框架。
+
+【提问规则】
+- 每次只问一个问题，语言自然亲切，像朋友聊天一样
+- 问题覆盖顺序：故事类型/背景设定 → 核心人物 → 主要冲突 → 故事主线 → 叙事视角与切入点 → 章节节奏
+- 用户说"不知道"或"跳过"时，根据常见创作规律给出合理默认值，继续推进
+- completeness ≥ 85 时将 question 设为 null
+
+【只输出合法 JSON，不含任何其他文字】
+{
+  "analysis": "对用户回答的简短友好反馈（1-2句，像编辑和作者在聊天）",
+  "question": "下一个问题，或 null",
+  "question_category": "问题类别（如：背景设定/人物塑造/剧情结构等）",
+  "outline": {
+    "logline": "一句话故事核心（主角 + 目标 + 障碍）",
+    "genre": "故事类型与风格基调",
+    "world": "世界观与背景设定",
+    "characters": [
+      {
+        "name": "人物名",
+        "role": "在故事中的角色定位",
+        "personality": "性格特征",
+        "arc": "人物在故事中经历的变化（人物弧光）"
+      }
+    ],
+    "conflict": "核心冲突（主角面临的最大阻碍是什么）",
+    "plot": {
+      "opening": "开篇事件（用什么钩住读者）",
+      "rising": "发展阶段（矛盾如何升级）",
+      "climax": "高潮转折点",
+      "resolution": "结局走向"
+    },
+    "writing_plan": {
+      "perspective": "叙事视角（第一人称/第三人称/多视角）",
+      "entry_character": "从哪个角色的视角开始写",
+      "entry_event": "以什么事件作为切入点",
+      "chapter_rhythm": "章节节奏建议（如：前三章的大致内容安排）"
+    },
+    "references": [
+      "推荐参考的同类作品或资料（注明相似之处）"
+    ]
+  },
+  "completeness": 整数0到100
+}"""
+
 COMPETITOR_PROMPT = """你是一位市场研究专家。根据产品PRD分析竞品（如启用联网则基于实时搜索，否则基于训练知识）。
 
 只输出合法 JSON：
@@ -243,7 +367,7 @@ def get_model() -> str:
     return st.session_state.get("cfg_model", "gpt-4o")
 
 def call_api(messages: list) -> str:
-    client = get_client()
+    client   = get_client()
     last_err = None
     for attempt in range(MAX_RETRY):
         try:
@@ -363,7 +487,8 @@ def ss_ideas() -> dict:
 def list_ideas() -> list[dict]:
     return sorted(
         [{"id": v["id"], "title": v.get("title", "未命名"),
-          "updated_at": v.get("updated_at", ""), "completeness": v.get("completeness", 0)}
+          "updated_at": v.get("updated_at", ""), "completeness": v.get("completeness", 0),
+          "idea_type": v.get("idea_type", "product")}
          for v in ss_ideas().values()],
         key=lambda x: x["updated_at"], reverse=True,
     )
@@ -381,10 +506,11 @@ def delete_idea(idea_id: str):
 def empty_prd() -> dict:
     return {k: ([] if k in LIST_FIELDS | FEATURE_FIELDS else "") for k, _ in PRD_MODULES}
 
-def new_idea(title: str) -> dict:
+def new_idea(title: str, idea_type: str = "product") -> dict:
     return {
         "id":                    uuid.uuid4().hex[:8],
         "title":                 title,
+        "idea_type":             idea_type,
         "created_at":            datetime.now().isoformat(),
         "updated_at":            datetime.now().isoformat(),
         "messages":              [],
@@ -393,11 +519,12 @@ def new_idea(title: str) -> dict:
         "competitor_analysis":   {},
         "ai_prompt":             "",
         "test_cases":            {},
+        "outline":               {},
         "completeness":          0,
         "milestones_celebrated": [],
     }
 
-# ─── PRD → Markdown ───────────────────────────────────────────────────────────
+# ─── PRD → Markdown（产品模式）────────────────────────────────────────────────
 def _render_functional_req(val: list, out: list):
     sub_fields = [("desc","功能说明"),("entry","入口与路径"),("interaction","交互逻辑"),
                   ("fields","字段说明"),("actions","操作行为"),("error_handling","异常处理"),
@@ -414,8 +541,8 @@ def prd_to_md(prd: dict, full: bool = False) -> str:
         return "_PRD 将在对话过程中自动填充..._"
     out = []
     for key, label in PRD_MODULES:
-        val = prd.get(key)
-        is_list = isinstance(val, list)
+        val         = prd.get(key)
+        is_list     = isinstance(val, list)
         has_content = (len(val) > 0) if is_list else bool(val)
         if not has_content and not full:
             continue
@@ -438,6 +565,74 @@ def prd_to_md(prd: dict, full: bool = False) -> str:
         else:
             out += [str(val), ""]
     return "\n".join(out) or ("_PRD 生成中..._" if not full else "")
+
+# ─── Outline → Markdown（文学模式）────────────────────────────────────────────
+def outline_to_md(outline: dict, section: str = "story") -> str:
+    """
+    section:
+      "story"  — 故事大纲（logline/genre/world/characters/conflict/plot）
+      "plan"   — 写作计划（writing_plan）
+      "refs"   — 参考资料（references）
+      "full"   — 完整创作蓝图（用于导出）
+    """
+    if not outline:
+        return "_大纲将在对话过程中自动填充..._"
+    out = []
+
+    def _add(title: str, content):
+        if content:
+            out.append(f"## {title}\n")
+            out.append(str(content))
+            out.append("")
+
+    if section in ("story", "full"):
+        _add("故事核心（Logline）", outline.get("logline"))
+        _add("类型与风格",         outline.get("genre"))
+        _add("世界观与背景",       outline.get("world"))
+        chars = outline.get("characters", [])
+        if chars:
+            out.append("## 人物档案\n")
+            for c in chars:
+                out.append(f"### {c.get('name', '人物')}")
+                if c.get("role"):        out.append(f"**角色定位：** {c['role']}")
+                if c.get("personality"): out.append(f"**性格特征：** {c['personality']}")
+                if c.get("arc"):         out.append(f"**人物弧光：** {c['arc']}")
+                out.append("")
+        _add("核心冲突", outline.get("conflict"))
+        plot = outline.get("plot", {})
+        if plot and isinstance(plot, dict) and any(plot.values()):
+            out.append("## 故事结构\n")
+            for k, lbl in [("opening","开篇事件"),("rising","发展阶段"),
+                            ("climax","高潮转折"),("resolution","结局走向")]:
+                if plot.get(k):
+                    out.append(f"**{lbl}：** {plot[k]}")
+            out.append("")
+
+    if section in ("plan", "full"):
+        wp = outline.get("writing_plan", {})
+        if wp and isinstance(wp, dict) and any(wp.values()):
+            out.append("## 写作计划\n")
+            for k, lbl in [("perspective","叙事视角"),("entry_character","切入角色"),
+                            ("entry_event","切入事件"),("chapter_rhythm","章节节奏")]:
+                if wp.get(k):
+                    out.append(f"**{lbl}：** {wp[k]}")
+            out.append("")
+
+    if section in ("refs", "full"):
+        refs = outline.get("references", [])
+        if refs:
+            out.append("## 参考资料\n")
+            for i, r in enumerate(refs, 1):
+                out.append(f"{i}. {r}")
+            out.append("")
+
+    return "\n".join(out) or "_大纲生成中..._"
+
+def lit_export_md(idea: dict) -> str:
+    title   = idea.get("title", "未命名")
+    outline = idea.get("outline", {})
+    header  = f"# {title} — 创作蓝图\n\n_生成于：{datetime.now().strftime('%Y-%m-%d %H:%M')}_\n\n---\n\n"
+    return header + outline_to_md(outline, section="full")
 
 # ─── Competitor / Test → Markdown ─────────────────────────────────────────────
 def competitor_to_md(ca: dict) -> str:
@@ -531,12 +726,6 @@ def gen_test_cases(idea: dict) -> tuple[dict, str]:
     except Exception as e:
         return {}, str(e)
 
-def stage_status(prd: dict, fields: list) -> str:
-    filled = sum(1 for f in fields if field_filled(prd, f))
-    if filled == len(fields): return "done"
-    if filled > 0:            return "partial"
-    return "empty"
-
 # ─── Session state defaults ───────────────────────────────────────────────────
 _DEFAULTS = {
     "page":                 "home",
@@ -552,6 +741,7 @@ _DEFAULTS = {
     "suggest_flow_refresh": False,
     "new_milestone":        0,
     "stage3_choice":        "",
+    "new_idea_type":        "",
 }
 for _k, _v in _DEFAULTS.items():
     if _k not in st.session_state:
@@ -562,7 +752,7 @@ for _k, _v in _DEFAULTS.items():
 # ═══════════════════════════════════════════════════════════════════════════════
 def page_home():
     st.title("💡 Idea 需求分析器")
-    st.caption("将模糊灵感转化为专业可落地的需求文档 · 竞品分析 · AI开发Prompt · 测试用例")
+    st.caption("将模糊灵感转化为专业可落地的需求文档 · 竞品分析 · AI开发Prompt · 测试用例 · 文学创作蓝图")
     st.markdown("---")
 
     if not is_configured():
@@ -570,7 +760,8 @@ def page_home():
         return
 
     if st.button("➕ 新建创意", type="primary"):
-        st.session_state.page = "new"
+        st.session_state.page         = "new"
+        st.session_state.new_idea_type = ""
         st.rerun()
 
     ideas = list_ideas()
@@ -581,7 +772,9 @@ def page_home():
     st.subheader(f"我的创意（{len(ideas)} 个）")
     for idea in ideas:
         c1, c2, c3, c4, c5 = st.columns([5, 2, 2, 1, 1])
-        with c1: st.markdown(f"**{idea['title']}**")
+        with c1:
+            badge = "📦" if idea.get("idea_type", "product") == "product" else "✍️"
+            st.markdown(f"{badge} **{idea['title']}**")
         with c2:
             ts = idea["updated_at"][:16].replace("T", " ") if idea["updated_at"] else "-"
             st.caption(ts)
@@ -607,29 +800,65 @@ def page_home():
 # ═══════════════════════════════════════════════════════════════════════════════
 def page_new():
     if st.button("← 返回"):
-        st.session_state.page = "home"
+        st.session_state.page          = "home"
+        st.session_state.new_idea_type = ""
         st.rerun()
     st.title("新建创意")
+
+    # Step 1: 选择类型
+    if not st.session_state.get("new_idea_type"):
+        st.subheader("选择创意类型")
+        st.markdown("你的这个 idea，是要做个产品，还是写一个故事？")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            with st.container(border=True):
+                st.markdown("### 📦 产品需求")
+                st.caption("帮你把产品 idea 梳理成专业需求文档")
+                st.markdown("- 🔍 竞品分析\n- 📋 13模块PRD\n- 🤖 AI开发Prompt\n- 🧪 测试用例")
+                if st.button("选择 产品需求 →", type="primary", use_container_width=True):
+                    st.session_state.new_idea_type = "product"
+                    st.rerun()
+        with col_b:
+            with st.container(border=True):
+                st.markdown("### ✍️ 文学创作")
+                st.caption("帮你把故事 idea 梳理成完整创作蓝图")
+                st.markdown("- 📖 故事大纲\n- 👤 人物档案\n- 🗺️ 写作计划\n- 📚 参考资料")
+                if st.button("选择 文学创作 →", use_container_width=True):
+                    st.session_state.new_idea_type = "literature"
+                    st.rerun()
+        return
+
+    # Step 2: 填写描述
+    itype      = st.session_state.new_idea_type
+    type_label = "📦 产品需求" if itype == "product" else "✍️ 文学创作"
+    st.caption(f"已选择：{type_label}")
+
+    placeholder = (
+        "例如：我想做一款帮助大学生找兼职的App…"
+        if itype == "product"
+        else "例如：我想写一个关于末日后人类重建文明的故事…"
+    )
+    label = "✏️ 用自己的话描述你的想法：" if itype == "product" else "✏️ 简单描述你的故事 idea："
+
     with st.form("new_form", clear_on_submit=True):
-        idea_text = st.text_area(
-            "✏️ 用自己的话描述你的想法：",
-            placeholder="例如：我想做一款帮助大学生找兼职的App…",
-            height=160,
-            help="不需要很完整，一两句话就行，AI会引导你深入挖掘",
-        )
-        go = st.form_submit_button("🚀 开始梳理需求", type="primary", use_container_width=True)
+        idea_text = st.text_area(label, placeholder=placeholder, height=160,
+                                 help="不需要很完整，一两句话就行，AI会引导你深入挖掘")
+        go = st.form_submit_button("🚀 开始梳理", type="primary", use_container_width=True)
+
     if go and idea_text.strip():
         raw_title = idea_text.strip()
         title     = (raw_title[:18] + "…") if len(raw_title) > 18 else raw_title
-        d         = new_idea(title)
-        d["messages"].append({"role": "user", "content": f"我的想法是：{raw_title}"})
+        d         = new_idea(title, idea_type=itype)
+        prefix    = "我的产品想法是：" if itype == "product" else "我的故事想法是："
+        d["messages"].append({"role": "user", "content": f"{prefix}{raw_title}"})
         save_idea(d)
-        st.session_state.idea       = d
-        st.session_state.edit_mode  = False
-        st.session_state.processing = True
+        st.session_state.idea          = d
+        st.session_state.edit_mode     = False
+        st.session_state.processing    = True
         st.session_state.new_milestone = 0
         st.session_state.stage3_choice = ""
-        st.session_state.page       = "workspace"
+        st.session_state.new_idea_type = ""
+        st.session_state.page          = "workspace"
         st.rerun()
 
 # ─── PRD editor component ─────────────────────────────────────────────────────
@@ -659,7 +888,7 @@ def render_prd_editor(idea: dict):
             prd[key] = new_val
     idea["prd"] = prd
 
-# ─── Progress panel component ─────────────────────────────────────────────────
+# ─── Progress panel（产品模式）────────────────────────────────────────────────
 def render_progress_panel(idea: dict):
     prd       = idea.get("prd", {})
     pct       = idea.get("completeness", 0)
@@ -683,13 +912,46 @@ def render_progress_panel(idea: dict):
 
     st.markdown("---")
     st.markdown("**已生成产出**")
-    has_prd    = any(field_filled(prd, k) for k, _ in PRD_MODULES)
+    has_prd = any(field_filled(prd, k) for k, _ in PRD_MODULES)
     for done, label in [
-        (has_prd,                          "📋 需求文档"),
-        (bool(idea.get("flowchart")),      "🗺️ 流程图"),
+        (has_prd,                               "📋 需求文档"),
+        (bool(idea.get("flowchart")),           "🗺️ 流程图"),
         (bool(idea.get("competitor_analysis")), "🔍 竞品分析"),
-        (bool(idea.get("ai_prompt")),      "🤖 开发Prompt"),
-        (bool(idea.get("test_cases")),     "🧪 测试用例"),
+        (bool(idea.get("ai_prompt")),           "🤖 开发Prompt"),
+        (bool(idea.get("test_cases")),          "🧪 测试用例"),
+    ]:
+        st.markdown(f"{'✅' if done else '⭕'} {label}")
+
+    st.markdown("---")
+    msg_count = len([m for m in idea.get("messages", []) if m["role"] == "user"])
+    st.caption(f"已回答 {msg_count} 个问题")
+
+# ─── Progress panel（文学模式）────────────────────────────────────────────────
+def render_progress_panel_lit(idea: dict):
+    outline   = idea.get("outline", {})
+    pct       = idea.get("completeness", 0)
+    completed = get_lit_completed_stages(idea)
+    current   = get_lit_current_stage(idea)
+
+    st.metric("创作完整度", f"{pct}%")
+    st.progress(pct / 100)
+    st.markdown("---")
+
+    st.markdown("**梳理进度**")
+    for s in LIT_STAGES:
+        done   = s["id"] in completed
+        active = s["id"] == current
+        icon   = "✅" if done else ("▶️" if active else "⭕")
+        weight = "**" if active else ""
+        st.markdown(f"{icon} {weight}{s['emoji']} {s['title']}{weight}")
+        if active: st.caption(f"　　{s['desc']}")
+
+    st.markdown("---")
+    st.markdown("**已生成产出**")
+    for done, label in [
+        (bool(outline),                              "📖 故事大纲"),
+        (lit_field_filled(outline, "writing_plan"),  "🗺️ 写作计划"),
+        (lit_field_filled(outline, "references"),    "📚 参考资料"),
     ]:
         st.markdown(f"{'✅' if done else '⭕'} {label}")
 
@@ -707,6 +969,8 @@ def page_workspace():
         st.rerun()
         return
 
+    itype = idea.get("idea_type", "product")
+
     tb1, tb2, tb3 = st.columns([1, 8, 1])
     with tb1:
         if st.button("← 返回"):
@@ -715,12 +979,20 @@ def page_workspace():
             st.session_state.page = "home"
             st.rerun()
     with tb2:
-        st.markdown(f"**{idea['title']}**")
+        badge = "📦" if itype == "product" else "✍️"
+        st.markdown(f"{badge} **{idea['title']}**")
     with tb3:
         if st.button("💾 保存"):
             save_idea(idea)
             st.toast("已保存 ✓")
 
+    if itype == "product":
+        _workspace_product(idea)
+    else:
+        _workspace_literature(idea)
+
+# ─── Product mode workspace ───────────────────────────────────────────────────
+def _workspace_product(idea: dict):
     if idea.get("completeness", 0) >= 85:
         st.success("🎉 需求梳理完成！右侧各 Tab 可查看/导出所有产出。")
 
@@ -849,144 +1121,316 @@ def page_workspace():
             else:
                 st.info("需求梳理完成后，点击上方按钮生成测试用例。")
 
-    # ══ LEFT: Chat ═════════════════════════════════════════════════════════════
     with left:
-        st.subheader("对话")
+        _chat_product(idea)
 
-        completed_now = get_completed_stages(idea)
-        done_count    = len(completed_now)
-        st.progress(done_count / 3, text=f"引导进度：{done_count} / 3 个阶段完成")
+# ─── Literature mode workspace ────────────────────────────────────────────────
+def _workspace_literature(idea: dict):
+    if idea.get("completeness", 0) >= 85:
+        st.success("🎉 创作蓝图梳理完成！右侧各 Tab 可查看/导出所有产出。")
 
-        milestone = st.session_state.get("new_milestone", 0)
-        if milestone:
-            s_info = GUIDED_STAGES[milestone - 1]
-            if milestone < 3:
-                st.balloons()
-                with st.container(border=True):
-                    st.success(
-                        f"🎉 **阶段 {milestone} 完成：{s_info['title']}！**\n\n"
-                        f"你已经把{s_info['desc'].replace('·', '、')}都想清楚了，继续加油！"
-                    )
-                    if st.button("继续梳理下一阶段 →", type="primary", use_container_width=True):
+    left, mid, right = st.columns([4, 2, 5], gap="medium")
+
+    with mid:
+        render_progress_panel_lit(idea)
+
+    with right:
+        tab_story, tab_plan, tab_refs, tab_export = st.tabs(
+            ["📖 故事大纲", "🗺️ 写作计划", "📚 参考资料", "📤 导出"]
+        )
+
+        with tab_story:
+            md = outline_to_md(idea.get("outline", {}), section="story")
+            if md.startswith("_大纲"):
+                st.info("对话开始后，故事大纲将在这里实时更新。")
+            else:
+                st.markdown(md)
+
+        with tab_plan:
+            md = outline_to_md(idea.get("outline", {}), section="plan")
+            if md.startswith("_大纲"):
+                st.info("写作计划将在对话后期生成。")
+            else:
+                st.markdown(md)
+
+        with tab_refs:
+            md = outline_to_md(idea.get("outline", {}), section="refs")
+            if md.startswith("_大纲"):
+                st.info("参考资料将在对话后期自动推荐。")
+            else:
+                st.markdown(md)
+
+        with tab_export:
+            st.download_button(
+                "📥 导出完整创作蓝图",
+                data=lit_export_md(idea),
+                file_name=f"{idea['title']}_创作蓝图.md",
+                mime="text/markdown",
+                type="primary",
+                use_container_width=True,
+            )
+            st.markdown("---")
+            preview = outline_to_md(idea.get("outline", {}), section="full")
+            if preview.startswith("_大纲"):
+                st.info("对话完成后，完整创作蓝图将在这里预览。")
+            else:
+                st.markdown(preview)
+
+    with left:
+        _chat_literature(idea)
+
+# ─── 里程碑庆祝横幅（共用）────────────────────────────────────────────────────
+def _render_milestone_banner(idea: dict, stages: list, is_lit: bool = False):
+    milestone = st.session_state.get("new_milestone", 0)
+    if not milestone:
+        return
+    total  = len(stages)
+    s_info = stages[milestone - 1]
+
+    if milestone < total:
+        st.balloons()
+        with st.container(border=True):
+            st.success(
+                f"🎉 **阶段 {milestone} 完成：{s_info['title']}！**\n\n"
+                f"你已经把{s_info['desc'].replace('·', '、')}都想清楚了，继续加油！"
+            )
+            if st.button("继续梳理下一阶段 →", type="primary", use_container_width=True,
+                         key="milestone_continue"):
+                st.session_state.new_milestone = 0
+                st.rerun()
+    else:
+        st.balloons()
+        with st.container(border=True):
+            if is_lit:
+                st.success("🎊 **创作蓝图梳理完成！所有阶段全部达成！**")
+                st.markdown(
+                    "故事的世界观、人物、冲突、结构和写作计划都已理清楚了！\n\n"
+                    "**点击右侧「📤 导出」Tab 下载完整创作蓝图，带着它开始动笔吧！**"
+                )
+                st.markdown("---")
+                ca, cb = st.columns(2)
+                with ca:
+                    if st.button("📤 去导出创作蓝图", type="primary", use_container_width=True,
+                                 key="lit_goto_export"):
+                        st.session_state.new_milestone = 0
+                        st.rerun()
+                with cb:
+                    if st.button("💪 继续完善更多细节", use_container_width=True,
+                                 key="lit_continue"):
                         st.session_state.new_milestone = 0
                         st.rerun()
             else:
-                st.balloons()
-                with st.container(border=True):
-                    st.success("🎊 **基础需求梳理完成！三个阶段全部达成！**")
-                    st.markdown(
-                        "你已经把产品 **是什么、给谁用、怎么做** 都想清楚了！\n\n"
-                        "**现在可以直接让AI帮你把产品做出来** —— "
-                        "生成专属开发Prompt，复制给 Cursor / Claude / GPT-4，直接开始构建！"
-                    )
-                    st.markdown("---")
-                    ca, cb = st.columns(2)
-                    with ca:
-                        if st.button("⚡ 先生成Prompt去做产品", type="primary", use_container_width=True):
-                            st.session_state.new_milestone  = 0
-                            st.session_state.stage3_choice  = "prompt"
-                            st.session_state.prompt_loading = True
-                            st.rerun()
-                    with cb:
-                        if st.button("💪 继续深化，完善更多细节", use_container_width=True):
-                            st.session_state.new_milestone = 0
-                            st.session_state.stage3_choice = "continue"
-                            st.rerun()
-
-        if st.session_state.get("stage3_choice") == "prompt" and idea.get("ai_prompt"):
-            st.info("✅ 开发Prompt已生成！点击右侧「🤖 AI开发Prompt」Tab 查看和复制。")
-
-        st.markdown("---")
-
-        for msg in idea.get("messages", []):
-            with st.chat_message(msg["role"]):
-                if msg["role"] == "user":
-                    st.write(msg["content"])
-                else:
-                    d = msg.get("display", {})
-                    if d.get("analysis"):  st.caption(f"💭 {d['analysis']}")
-                    if d.get("question"):
-                        badge = f"`{d.get('category','')}`" if d.get("category") else ""
-                        st.markdown(f"**问** {badge}：{d['question']}")
-                    elif d.get("done"):
-                        st.success("✅ 梳理完成！查看右侧各Tab获取产出。")
-                    else:
-                        st.write(msg.get("content", ""))
-
-        hide_input = (
-            st.session_state.get("new_milestone") == 3
-            or (st.session_state.get("stage3_choice") == "prompt" and not idea.get("ai_prompt"))
-        )
-        if not st.session_state.processing and not hide_input:
-            answer = st.chat_input("回答问题…（不知道说「跳过」，AI会自动填默认值）")
-            if answer:
-                idea["messages"].append({"role": "user", "content": answer})
-                st.session_state.processing = True
-                save_idea(idea)
-                st.rerun()
-
-        if st.session_state.processing:
-            msgs = idea.get("messages", [])
-            if msgs and msgs[-1]["role"] == "user":
-                stages_before = set(get_completed_stages(idea))
-                history       = msgs[-HISTORY_LIMIT:]
-                api_msgs = (
-                    [{"role": "system", "content": MAIN_PROMPT},
-                     {"role": "system", "content": get_stage_prompt(idea)}]
-                    + [{"role": m["role"], "content": m["content"]} for m in history]
+                st.success("🎊 **基础需求梳理完成！三个阶段全部达成！**")
+                st.markdown(
+                    "你已经把产品 **是什么、给谁用、怎么做** 都想清楚了！\n\n"
+                    "**现在可以直接让AI帮你把产品做出来** —— "
+                    "生成专属开发Prompt，复制给 Cursor / Claude / GPT-4，直接开始构建！"
                 )
-                with st.chat_message("assistant"):
-                    thinking  = st.empty()
-                    full_text = ""
-                    thinking.markdown("💭 _AI正在思考..._")
-                    try:
-                        for chunk in call_api_streaming(api_msgs):
-                            full_text += chunk
-                    except Exception:
-                        try:
-                            full_text = call_api(api_msgs)
-                        except Exception as e:
-                            thinking.empty()
-                            st.error(f"调用失败（已重试 {MAX_RETRY} 次）：{e}")
-                            st.session_state.processing = False
-                            st.stop()
-                    thinking.empty()
-                    parsed  = extract_json(full_text)
-                    display = {}
-                    if parsed:
-                        if parsed.get("prd"):         idea["prd"]          = parsed["prd"]
-                        if parsed.get("flowchart"):   idea["flowchart"]    = parsed["flowchart"]
-                        if "completeness" in parsed:  idea["completeness"] = int(parsed.get("completeness", 0))
-                        analysis = parsed.get("analysis", "")
-                        question = parsed.get("question")
-                        category = parsed.get("question_category", "")
-                        if analysis: st.caption(f"💭 {analysis}")
-                        if question:
-                            badge = f"`{category}`" if category else ""
-                            st.markdown(f"**问** {badge}：{question}")
-                        else:
-                            st.success("✅ 梳理完成！查看右侧各Tab获取产出。")
-                        display = {"analysis": analysis, "question": question,
-                                   "category": category, "done": question is None}
-                    else:
-                        st.warning("响应解析失败，原始内容：")
-                        st.code(full_text[:800])
+                st.markdown("---")
+                ca, cb = st.columns(2)
+                with ca:
+                    if st.button("⚡ 先生成Prompt去做产品", type="primary", use_container_width=True,
+                                 key="prod_gen_prompt"):
+                        st.session_state.new_milestone  = 0
+                        st.session_state.stage3_choice  = "prompt"
+                        st.session_state.prompt_loading = True
+                        st.rerun()
+                with cb:
+                    if st.button("💪 继续深化，完善更多细节", use_container_width=True,
+                                 key="prod_continue"):
+                        st.session_state.new_milestone = 0
+                        st.session_state.stage3_choice = "continue"
+                        st.rerun()
 
-                idea["messages"].append({"role": "assistant", "content": full_text, "display": display})
+# ─── Product mode chat ────────────────────────────────────────────────────────
+def _chat_product(idea: dict):
+    st.subheader("对话")
+    done_count = len(get_completed_stages(idea))
+    st.progress(done_count / 3, text=f"引导进度：{done_count} / 3 个阶段完成")
 
-                stages_after     = set(get_completed_stages(idea))
-                newly_completed  = stages_after - stages_before
-                celebrated_list  = idea.get("milestones_celebrated", [])
-                new_uncelebrated = [s for s in sorted(newly_completed) if s not in celebrated_list]
-                if new_uncelebrated:
-                    newest = new_uncelebrated[-1]
-                    celebrated_list.append(newest)
-                    idea["milestones_celebrated"] = celebrated_list
-                    st.session_state.new_milestone = newest
+    _render_milestone_banner(idea, GUIDED_STAGES, is_lit=False)
 
-                save_idea(idea)
+    if st.session_state.get("stage3_choice") == "prompt" and idea.get("ai_prompt"):
+        st.info("✅ 开发Prompt已生成！点击右侧「🤖 AI开发Prompt」Tab 查看和复制。")
+
+    st.markdown("---")
+    _render_chat_history(idea)
+
+    hide_input = (
+        st.session_state.get("new_milestone") == len(GUIDED_STAGES)
+        or (st.session_state.get("stage3_choice") == "prompt" and not idea.get("ai_prompt"))
+    )
+    if not st.session_state.processing and not hide_input:
+        answer = st.chat_input("回答问题…（不知道说「跳过」，AI会自动填默认值）")
+        if answer:
+            idea["messages"].append({"role": "user", "content": answer})
+            st.session_state.processing = True
+            save_idea(idea)
+            st.rerun()
+
+    if st.session_state.processing:
+        _process_product_response(idea)
+
+# ─── Literature mode chat ─────────────────────────────────────────────────────
+def _chat_literature(idea: dict):
+    st.subheader("对话")
+    done_count = len(get_lit_completed_stages(idea))
+    total      = len(LIT_STAGES)
+    st.progress(done_count / total, text=f"引导进度：{done_count} / {total} 个阶段完成")
+
+    _render_milestone_banner(idea, LIT_STAGES, is_lit=True)
+
+    st.markdown("---")
+    _render_chat_history(idea)
+
+    hide_input = st.session_state.get("new_milestone") == len(LIT_STAGES)
+    if not st.session_state.processing and not hide_input:
+        answer = st.chat_input("回答问题…（不知道说「跳过」，AI会自动填默认值）")
+        if answer:
+            idea["messages"].append({"role": "user", "content": answer})
+            st.session_state.processing = True
+            save_idea(idea)
+            st.rerun()
+
+    if st.session_state.processing:
+        _process_literature_response(idea)
+
+# ─── 对话历史渲染（共用）──────────────────────────────────────────────────────
+def _render_chat_history(idea: dict):
+    for msg in idea.get("messages", []):
+        with st.chat_message(msg["role"]):
+            if msg["role"] == "user":
+                st.write(msg["content"])
+            else:
+                d = msg.get("display", {})
+                if d.get("analysis"):  st.caption(f"💭 {d['analysis']}")
+                if d.get("question"):
+                    badge = f"`{d.get('category','')}`" if d.get("category") else ""
+                    st.markdown(f"**问** {badge}：{d['question']}")
+                elif d.get("done"):
+                    st.success("✅ 梳理完成！查看右侧各Tab获取产出。")
+                else:
+                    st.write(msg.get("content", ""))
+
+# ─── 里程碑检测（共用）────────────────────────────────────────────────────────
+def _check_and_celebrate(idea: dict, stages_before: set, stages_after: list):
+    newly_completed  = set(stages_after) - stages_before
+    celebrated_list  = idea.get("milestones_celebrated", [])
+    new_uncelebrated = [s for s in sorted(newly_completed) if s not in celebrated_list]
+    if new_uncelebrated:
+        newest = new_uncelebrated[-1]
+        celebrated_list.append(newest)
+        idea["milestones_celebrated"] = celebrated_list
+        st.session_state.new_milestone = newest
+
+# ─── Product mode AI response ─────────────────────────────────────────────────
+def _process_product_response(idea: dict):
+    msgs = idea.get("messages", [])
+    if not (msgs and msgs[-1]["role"] == "user"):
+        return
+    stages_before = set(get_completed_stages(idea))
+    history       = msgs[-HISTORY_LIMIT:]
+    api_msgs = (
+        [{"role": "system", "content": MAIN_PROMPT},
+         {"role": "system", "content": get_stage_prompt(idea)}]
+        + [{"role": m["role"], "content": m["content"]} for m in history]
+    )
+    with st.chat_message("assistant"):
+        thinking  = st.empty()
+        full_text = ""
+        thinking.markdown("💭 _AI正在思考..._")
+        try:
+            for chunk in call_api_streaming(api_msgs):
+                full_text += chunk
+        except Exception:
+            try:
+                full_text = call_api(api_msgs)
+            except Exception as e:
+                thinking.empty()
+                st.error(f"调用失败（已重试 {MAX_RETRY} 次）：{e}")
                 st.session_state.processing = False
-                st.rerun()
+                st.stop()
+        thinking.empty()
+        parsed  = extract_json(full_text)
+        display = {}
+        if parsed:
+            if parsed.get("prd"):        idea["prd"]          = parsed["prd"]
+            if parsed.get("flowchart"):  idea["flowchart"]    = parsed["flowchart"]
+            if "completeness" in parsed: idea["completeness"] = int(parsed.get("completeness", 0))
+            analysis = parsed.get("analysis", "")
+            question = parsed.get("question")
+            category = parsed.get("question_category", "")
+            if analysis: st.caption(f"💭 {analysis}")
+            if question:
+                badge = f"`{category}`" if category else ""
+                st.markdown(f"**问** {badge}：{question}")
+            else:
+                st.success("✅ 梳理完成！查看右侧各Tab获取产出。")
+            display = {"analysis": analysis, "question": question,
+                       "category": category, "done": question is None}
+        else:
+            st.warning("响应解析失败，原始内容：")
+            st.code(full_text[:800])
+
+    idea["messages"].append({"role": "assistant", "content": full_text, "display": display})
+    _check_and_celebrate(idea, stages_before, get_completed_stages(idea))
+    save_idea(idea)
+    st.session_state.processing = False
+    st.rerun()
+
+# ─── Literature mode AI response ──────────────────────────────────────────────
+def _process_literature_response(idea: dict):
+    msgs = idea.get("messages", [])
+    if not (msgs and msgs[-1]["role"] == "user"):
+        return
+    stages_before = set(get_lit_completed_stages(idea))
+    history       = msgs[-HISTORY_LIMIT:]
+    api_msgs = (
+        [{"role": "system", "content": LIT_PROMPT},
+         {"role": "system", "content": get_lit_stage_prompt(idea)}]
+        + [{"role": m["role"], "content": m["content"]} for m in history]
+    )
+    with st.chat_message("assistant"):
+        thinking  = st.empty()
+        full_text = ""
+        thinking.markdown("💭 _AI正在思考..._")
+        try:
+            for chunk in call_api_streaming(api_msgs):
+                full_text += chunk
+        except Exception:
+            try:
+                full_text = call_api(api_msgs)
+            except Exception as e:
+                thinking.empty()
+                st.error(f"调用失败（已重试 {MAX_RETRY} 次）：{e}")
+                st.session_state.processing = False
+                st.stop()
+        thinking.empty()
+        parsed  = extract_json(full_text)
+        display = {}
+        if parsed:
+            if parsed.get("outline"):    idea["outline"]      = parsed["outline"]
+            if "completeness" in parsed: idea["completeness"] = int(parsed.get("completeness", 0))
+            analysis = parsed.get("analysis", "")
+            question = parsed.get("question")
+            category = parsed.get("question_category", "")
+            if analysis: st.caption(f"💭 {analysis}")
+            if question:
+                badge = f"`{category}`" if category else ""
+                st.markdown(f"**问** {badge}：{question}")
+            else:
+                st.success("✅ 创作蓝图梳理完成！查看右侧各Tab获取产出。")
+            display = {"analysis": analysis, "question": question,
+                       "category": category, "done": question is None}
+        else:
+            st.warning("响应解析失败，原始内容：")
+            st.code(full_text[:800])
+
+    idea["messages"].append({"role": "assistant", "content": full_text, "display": display})
+    _check_and_celebrate(idea, stages_before, get_lit_completed_stages(idea))
+    save_idea(idea)
+    st.session_state.processing = False
+    st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ROUTER
