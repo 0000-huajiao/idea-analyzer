@@ -726,6 +726,45 @@ def gen_test_cases(idea: dict) -> tuple[dict, str]:
     except Exception as e:
         return {}, str(e)
 
+# ─── Edit diff & AI sync helpers ─────────────────────────────────────────────
+def _compute_prd_diff(old: dict, new: dict) -> list[str]:
+    """返回有内容变更的 PRD 字段中文名列表。"""
+    changed = []
+    for key, label in PRD_MODULES:
+        if json.dumps(old.get(key), ensure_ascii=False, sort_keys=True) != \
+           json.dumps(new.get(key), ensure_ascii=False, sort_keys=True):
+            changed.append(label)
+    return changed
+
+_OUTLINE_LABELS = {
+    "logline": "故事核心", "genre": "类型与风格", "world": "世界观与背景",
+    "characters": "人物档案", "conflict": "核心冲突", "plot": "故事结构",
+    "writing_plan": "写作计划", "references": "参考资料",
+}
+
+def _compute_outline_diff(old: dict, new: dict) -> list[str]:
+    """返回有内容变更的 outline 字段中文名列表。"""
+    return [
+        lbl for key, lbl in _OUTLINE_LABELS.items()
+        if json.dumps(old.get(key), ensure_ascii=False, sort_keys=True) !=
+           json.dumps(new.get(key), ensure_ascii=False, sort_keys=True)
+    ]
+
+def _append_edit_notification(idea: dict, changed_fields: list[str]):
+    """向对话历史追加一条对用户不可见的系统通知，告知 AI 哪些字段被手动修改。"""
+    if not changed_fields:
+        return
+    fields_str = "、".join(changed_fields)
+    idea["messages"].append({
+        "role":    "user",
+        "content": (
+            f"[系统通知] 用户刚刚手动更新了以下内容：{fields_str}。"
+            "请基于最新内容继续提问，不要重复询问用户已经填写的部分。"
+            "用户手动编辑的内容具有最高优先级，不要在后续回复中覆盖这些字段。"
+        ),
+        "hidden": True,
+    })
+
 # ─── Session state defaults ───────────────────────────────────────────────────
 _DEFAULTS = {
     "page":                 "home",
@@ -888,6 +927,62 @@ def render_prd_editor(idea: dict):
             prd[key] = new_val
     idea["prd"] = prd
 
+# ─── Outline editor component（文学模式）────────────────────────────────────
+def render_outline_editor(idea: dict):
+    outline = idea.get("outline", {}) or {}
+    iid     = idea["id"]
+    st.caption("修改后点击「完成编辑」自动保存并通知 AI。")
+
+    for key, label, height in [
+        ("logline",  "故事核心（Logline）", 60),
+        ("genre",    "类型与风格",          60),
+        ("world",    "世界观与背景",        100),
+        ("conflict", "核心冲突",            80),
+    ]:
+        st.markdown(f"**{label}**")
+        new_val = st.text_area(label, value=outline.get(key) or "", height=height,
+                               key=f"ol_{iid}_{key}", label_visibility="collapsed")
+        outline[key] = new_val
+
+    st.markdown("**人物档案（JSON 格式）**")
+    chars_val = json.dumps(outline.get("characters", []), ensure_ascii=False, indent=2)
+    new_chars = st.text_area("characters", value=chars_val, height=200,
+                             key=f"ol_{iid}_characters", label_visibility="collapsed",
+                             help='[{"name":"名","role":"角色","personality":"性格","arc":"弧光"}]')
+    try:
+        outline["characters"] = json.loads(new_chars)
+    except json.JSONDecodeError:
+        pass
+
+    st.markdown("**故事结构**")
+    plot = dict(outline.get("plot") or {})
+    for k, lbl, h in [("opening","开篇事件",60),("rising","发展阶段",80),
+                       ("climax","高潮转折",60),("resolution","结局走向",60)]:
+        st.caption(lbl)
+        new_val = st.text_area(lbl, value=plot.get(k) or "", height=h,
+                               key=f"ol_{iid}_plot_{k}", label_visibility="collapsed")
+        plot[k] = new_val
+    outline["plot"] = plot
+
+    st.markdown("**写作计划**")
+    wp = dict(outline.get("writing_plan") or {})
+    for k, lbl, h in [("perspective","叙事视角",60),("entry_character","切入角色",60),
+                       ("entry_event","切入事件",60),("chapter_rhythm","章节节奏",100)]:
+        st.caption(lbl)
+        new_val = st.text_area(lbl, value=wp.get(k) or "", height=h,
+                               key=f"ol_{iid}_wp_{k}", label_visibility="collapsed")
+        wp[k] = new_val
+    outline["writing_plan"] = wp
+
+    st.markdown("**参考资料**（每行一条）")
+    refs     = outline.get("references", [])
+    refs_str = "\n".join(refs) if isinstance(refs, list) else str(refs or "")
+    new_refs = st.text_area("references", value=refs_str, height=100,
+                            key=f"ol_{iid}_references", label_visibility="collapsed")
+    outline["references"] = [ln for ln in new_refs.splitlines() if ln.strip()]
+
+    idea["outline"] = outline
+
 # ─── Progress panel（产品模式）────────────────────────────────────────────────
 def render_progress_panel(idea: dict):
     prd       = idea.get("prd", {})
@@ -1009,12 +1104,23 @@ def _workspace_product(idea: dict):
         with tab_prd:
             b1, b2 = st.columns(2)
             with b1:
-                edit_lbl = "✅ 退出编辑" if st.session_state.edit_mode else "✏️ 手动编辑PRD"
+                edit_lbl = "✅ 完成编辑" if st.session_state.edit_mode else "✏️ 手动编辑PRD"
                 if st.button(edit_lbl, use_container_width=True):
                     if st.session_state.edit_mode:
+                        # 退出编辑：diff → 通知 AI → 保存
+                        old_prd  = idea.pop("_edit_snapshot", {})
+                        changed  = _compute_prd_diff(old_prd, idea.get("prd", {}))
+                        if changed:
+                            _append_edit_notification(idea, changed)
+                            st.session_state.processing = True
                         save_idea(idea)
                         st.toast("保存成功 ✓")
                         st.session_state.suggest_flow_refresh = True
+                    else:
+                        # 进入编辑：保存当前 PRD 快照
+                        idea["_edit_snapshot"] = json.loads(
+                            json.dumps(idea.get("prd", {}), ensure_ascii=False)
+                        )
                     st.session_state.edit_mode = not st.session_state.edit_mode
                     st.rerun()
             with b2:
@@ -1140,11 +1246,37 @@ def _workspace_literature(idea: dict):
         )
 
         with tab_story:
-            md = outline_to_md(idea.get("outline", {}), section="story")
-            if md.startswith("_大纲"):
-                st.info("对话开始后，故事大纲将在这里实时更新。")
+            b1, b2 = st.columns(2)
+            with b1:
+                edit_lbl = "✅ 完成编辑" if st.session_state.edit_mode else "✏️ 手动编辑大纲"
+                if st.button(edit_lbl, use_container_width=True, key="lit_edit_btn"):
+                    if st.session_state.edit_mode:
+                        old_outline = idea.pop("_edit_snapshot", {})
+                        changed     = _compute_outline_diff(old_outline, idea.get("outline", {}))
+                        if changed:
+                            _append_edit_notification(idea, changed)
+                            st.session_state.processing = True
+                        save_idea(idea)
+                        st.toast("保存成功 ✓")
+                    else:
+                        idea["_edit_snapshot"] = json.loads(
+                            json.dumps(idea.get("outline", {}), ensure_ascii=False)
+                        )
+                    st.session_state.edit_mode = not st.session_state.edit_mode
+                    st.rerun()
+            with b2:
+                st.download_button("📥 导出创作蓝图", data=lit_export_md(idea),
+                                   file_name=f"{idea['title']}_创作蓝图.md",
+                                   mime="text/markdown", use_container_width=True,
+                                   key="lit_dl_story")
+            if st.session_state.edit_mode:
+                render_outline_editor(idea)
             else:
-                st.markdown(md)
+                md = outline_to_md(idea.get("outline", {}), section="story")
+                if md.startswith("_大纲"):
+                    st.info("对话开始后，故事大纲将在这里实时更新。")
+                else:
+                    st.markdown(md)
 
         with tab_plan:
             md = outline_to_md(idea.get("outline", {}), section="plan")
@@ -1298,6 +1430,8 @@ def _chat_literature(idea: dict):
 # ─── 对话历史渲染（共用）──────────────────────────────────────────────────────
 def _render_chat_history(idea: dict):
     for msg in idea.get("messages", []):
+        if msg.get("hidden"):   # 系统通知，对用户不可见
+            continue
         with st.chat_message(msg["role"]):
             if msg["role"] == "user":
                 st.write(msg["content"])
