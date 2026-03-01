@@ -86,6 +86,7 @@ PRD_MODULES = [
     ("non_functional",    "非功能需求"),
     ("business_rules",    "业务规则与逻辑"),
     ("ui_prototype",      "页面原型与交互说明"),
+    ("ui_style",          "页面风格与配色"),
     ("data_requirements", "数据需求"),
     ("dependencies",      "接口与依赖说明"),
     ("testing",           "测试要点与验收标准"),
@@ -106,6 +107,7 @@ EXPORT_HINTS = {
     "non_functional":    "- 性能要求：\n- 兼容性：\n- 安全性：\n- 易用性：",
     "business_rules":    ["（待填写）规则描述"],
     "ui_prototype":      "- 页面跳转关系：\n- 动效/弹窗说明：\n- 文案规范：",
+    "ui_style":          "- 整体风格：（如：极简清爽 / 活泼年轻 / 商务专业 / 科技感）\n- 主色调：\n- 辅助色：\n- 字体方向：\n- 特殊视觉要求：",
     "data_requirements": "- 埋点事件：\n- 统计指标：\n- 数据口径：",
     "dependencies":      "- 第三方服务：\n- 接口约定：\n- 依赖系统：",
     "testing":           ["（待填写）测试场景：验收条件"],
@@ -255,6 +257,7 @@ MAIN_PROMPT = """你是一位资深产品经理，专门帮助非专业用户用
 - 严格按照系统提示中的【当前引导阶段】聚焦提问，不要跳跃
 - completeness ≥ 85 时将 question 设为 null
 - 每次回复都要尽量填充所有已知的PRD字段
+- ui_style 为空时，在核心功能已明确后询问："你对这个产品的视觉风格有什么想法吗？比如极简清爽、活泼年轻、商务专业……没想法的话我来帮你设计一套 😊"；用户没有想法或跳过时，根据产品定位自行设计一套合适的风格与配色方案填入
 
 【只输出合法 JSON，不含任何其他文字】
 {
@@ -270,6 +273,7 @@ MAIN_PROMPT = """你是一位资深产品经理，专门帮助非专业用户用
     "non_functional":    "性能、兼容性、安全性、易用性",
     "business_rules":    ["规则：状态流转/计算公式/校验规则"],
     "ui_prototype":      "页面跳转、动效弹窗、文案规范",
+    "ui_style":          "整体风格 / 主色调 / 辅助色 / 字体方向 / 特殊视觉要求（用户无想法时由AI根据产品定位设计）",
     "data_requirements": "埋点事件、统计指标、数据口径",
     "dependencies":      "第三方服务、接口约定、依赖系统",
     "testing":           ["测试场景：验收条件"],
@@ -345,9 +349,16 @@ COMPETITOR_PROMPT = """你是一位市场研究专家。根据产品PRD分析竞
   "feasibility": {"score": 1到10整数, "rationale": "可行性理由", "recommendations": ["行动建议"]}
 }"""
 
-DEV_PROMPT_SYSTEM = """你是专业AI提示词工程师。根据PRD生成可直接提交给 Cursor/Claude/GPT-4 的开发提示词。
-要求：包含完整技术背景、功能需求、UI/UX、技术栈、数据模型，按优先级分模块。
-只输出提示词正文，不含解释或JSON。"""
+WIREFRAME_PROMPT = """你是一位UI/UX设计师，根据PRD（含页面风格与配色）为每个核心页面生成ASCII线框图原型。
+
+要求：
+- 用 +--+  |  [ ]  ( )  等ASCII字符表示UI元素（导航栏、按钮、输入框、卡片、列表、图片占位符等）
+- 每个核心页面独立输出，标注页面名称
+- 在线框图下方用1-2句说明该页面的核心交互逻辑
+- 结合 ui_style 中的风格和配色，在备注里标注建议色值/风格要点
+- 输出所有核心页面，不要遗漏主流程中的关键页面
+
+只输出线框图文本，不含JSON，格式清晰易读。"""
 
 TEST_CASE_PROMPT = """你是QA工程师。根据PRD生成测试用例。
 只输出合法 JSON：
@@ -707,11 +718,11 @@ def gen_competitor(idea: dict) -> tuple[dict, str]:
     except Exception as e:
         return {}, str(e)
 
-def gen_dev_prompt(idea: dict) -> str:
+def gen_wireframe(idea: dict) -> str:
     try:
         return call_api([
-            {"role": "system", "content": DEV_PROMPT_SYSTEM},
-            {"role": "user",   "content": f"基于以下PRD生成AI开发Prompt：\n\n{prd_to_md(idea.get('prd', {}))}"},
+            {"role": "system", "content": WIREFRAME_PROMPT},
+            {"role": "user",   "content": f"请根据以下PRD生成各核心页面的ASCII线框图：\n\n{prd_to_md(idea.get('prd', {}), full=True)}"},
         ])
     except Exception:
         return ""
@@ -1013,7 +1024,7 @@ def render_progress_panel(idea: dict):
         (has_prd,                               "📋 需求文档"),
         (bool(idea.get("flowchart")),           "🗺️ 流程图"),
         (bool(idea.get("competitor_analysis")), "🔍 竞品分析"),
-        (bool(idea.get("ai_prompt")),           "🤖 开发Prompt"),
+        (bool(idea.get("ai_prompt")),           "🎨 ASCII原型图"),
         (bool(idea.get("test_cases")),          "🧪 测试用例"),
     ]:
         st.markdown(f"{'✅' if done else '⭕'} {label}")
@@ -1098,8 +1109,8 @@ def _workspace_product(idea: dict):
         render_progress_panel(idea)
 
     with right:
-        tab_prd, tab_flow, tab_comp, tab_prompt, tab_test = st.tabs(
-            ["📋 需求文档", "🗺️ 流程图", "🔍 竞品分析", "🤖 AI开发Prompt", "🧪 测试用例"]
+        tab_prd, tab_flow, tab_comp, tab_wire, tab_test = st.tabs(
+            ["📋 需求文档", "🗺️ 流程图", "🔍 竞品分析", "🎨 ASCII原型图", "🧪 测试用例"]
         )
 
         with tab_prd:
@@ -1182,26 +1193,25 @@ def _workspace_product(idea: dict):
                 st.error(f"分析失败：{st.session_state.comp_error}")
             st.markdown(competitor_to_md(idea.get("competitor_analysis", {})))
 
-        with tab_prompt:
-            if st.button("⚡ 生成AI开发Prompt", type="primary", use_container_width=True):
+        with tab_wire:
+            if st.button("🎨 生成ASCII原型图", type="primary", use_container_width=True):
                 st.session_state.prompt_loading = True
                 st.rerun()
             if st.session_state.prompt_loading:
-                with st.spinner("正在生成开发Prompt..."):
-                    pt = gen_dev_prompt(idea)
-                    if pt:
-                        idea["ai_prompt"] = pt
+                with st.spinner("AI正在绘制ASCII原型图（可能需要30-60秒）..."):
+                    wf = gen_wireframe(idea)
+                    if wf:
+                        idea["ai_prompt"] = wf
                         save_idea(idea)
                 st.session_state.prompt_loading = False
                 st.rerun()
             if idea.get("ai_prompt"):
-                st.download_button("📋 下载Prompt文件", data=idea["ai_prompt"],
-                                   file_name=f"{idea['title']}_DevPrompt.txt",
+                st.download_button("📥 下载原型图文件", data=idea["ai_prompt"],
+                                   file_name=f"{idea['title']}_原型图.txt",
                                    mime="text/plain", use_container_width=True)
-                st.text_area("prompt_display", value=idea["ai_prompt"], height=420,
-                             label_visibility="collapsed")
+                st.code(idea["ai_prompt"], language="text")
             else:
-                st.info("需求梳理完成后，点击上方按钮生成可直接提交给 Cursor/Claude/GPT-4 的专属Prompt。")
+                st.info("需求梳理完成后，点击上方按钮生成各核心页面的ASCII线框图，可直接喂给 AI 辅助还原视觉稿。")
 
         with tab_test:
             if st.button("🧪 生成测试用例", type="primary", use_container_width=True):
@@ -1356,13 +1366,12 @@ def _render_milestone_banner(idea: dict, stages: list, is_lit: bool = False):
                 st.success("🎊 **基础需求梳理完成！三个阶段全部达成！**")
                 st.markdown(
                     "你已经把产品 **是什么、给谁用、怎么做** 都想清楚了！\n\n"
-                    "**现在可以直接让AI帮你把产品做出来** —— "
-                    "生成专属开发Prompt，复制给 Cursor / Claude / GPT-4，直接开始构建！"
+                    "**现在可以生成 ASCII 原型图** —— 把视觉布局描述清楚，直接喂给 AI 快速还原界面！"
                 )
                 st.markdown("---")
                 ca, cb = st.columns(2)
                 with ca:
-                    if st.button("⚡ 先生成Prompt去做产品", type="primary", use_container_width=True,
+                    if st.button("🎨 先生成ASCII原型图", type="primary", use_container_width=True,
                                  key="prod_gen_prompt"):
                         st.session_state.new_milestone  = 0
                         st.session_state.stage3_choice  = "prompt"
@@ -1384,7 +1393,7 @@ def _chat_product(idea: dict):
     _render_milestone_banner(idea, GUIDED_STAGES, is_lit=False)
 
     if st.session_state.get("stage3_choice") == "prompt" and idea.get("ai_prompt"):
-        st.info("✅ 开发Prompt已生成！点击右侧「🤖 AI开发Prompt」Tab 查看和复制。")
+        st.info("✅ ASCII原型图已生成！点击右侧「🎨 ASCII原型图」Tab 查看和下载。")
 
     st.markdown("---")
     _render_chat_history(idea)
