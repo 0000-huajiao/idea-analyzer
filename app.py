@@ -23,93 +23,192 @@ st.set_page_config(
 )
 
 # ─── Global CSS ───────────────────────────────────────────────────────────────
+# Design system: "Midnight Iris"
+# Palette inspired by Linear dark + vibrant multi-tone accents
+#   bg #0e0e13 | surface #16161e | violet #8b5cf6 | cyan #22d3ee | pink #e879f9
 st.markdown("""
 <style>
-/* ── Base ────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════
+   MIDNIGHT IRIS — Dark Design System
+   bg: #0e0e13 | surface: #16161e | accent: #8b5cf6 | cyan: #22d3ee
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Base app ─────────────────────────────────────────────────────── */
 .stApp {
-    background: #f5f4ff;
+    background: #0e0e13 !important;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
                  'Microsoft YaHei', sans-serif;
 }
 
-/* ── Sidebar ─────────────────────────────────────────────────────── */
+/* Main body text */
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] td,
+[data-testid="stMarkdownContainer"] th {
+    color: #c4c0d9 !important;
+}
+[data-testid="stMarkdownContainer"] strong,
+[data-testid="stMarkdownContainer"] b {
+    color: #eeeaf8 !important;
+}
+[data-testid="stMarkdownContainer"] code {
+    background: #1e1e2e !important;
+    color: #a78bfa !important;
+    border-radius: 4px !important;
+    padding: 1px 5px !important;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────── */
 section[data-testid="stSidebar"] {
-    background: linear-gradient(160deg, #1a1040 0%, #2d1b69 55%, #1e3a5f 100%) !important;
-    border-right: none !important;
+    background: #0a0a10 !important;
+    border-right: 1px solid #1e1e2c !important;
 }
 section[data-testid="stSidebar"] p,
 section[data-testid="stSidebar"] .stCaption,
 section[data-testid="stSidebar"] label,
 section[data-testid="stSidebar"] span {
-    color: #c4b5fd !important;
+    color: #857fa8 !important;
 }
 section[data-testid="stSidebar"] h1 {
-    color: #fff !important;
-    font-size: 1.25rem !important;
+    color: #eeeaf8 !important;
+    font-size: 1.2rem !important;
     letter-spacing: -0.3px !important;
 }
 section[data-testid="stSidebar"] input {
-    background: rgba(255,255,255,0.10) !important;
-    border: 1px solid rgba(196,181,253,0.35) !important;
+    background: #16161e !important;
+    border: 1px solid #2a2a3e !important;
     border-radius: 8px !important;
-    color: #fff !important;
+    color: #eeeaf8 !important;
 }
-section[data-testid="stSidebar"] [data-testid="stAlert"] {
-    background: rgba(16,185,129,0.15) !important;
-    border: 1px solid rgba(16,185,129,0.30) !important;
+section[data-testid="stSidebar"] input:focus {
+    border-color: #8b5cf6 !important;
+    box-shadow: 0 0 0 2px rgba(139,92,246,0.22) !important;
+}
+/* Sidebar success alert (API key configured) */
+section[data-testid="stSidebar"] [data-testid="stAlert"],
+section[data-testid="stSidebar"] [data-baseweb="notification"] {
+    background: rgba(16,185,129,0.10) !important;
+    border: 1px solid rgba(52,211,153,0.22) !important;
     border-radius: 10px !important;
 }
-section[data-testid="stSidebar"] [data-testid="stAlert"] p {
-    color: #6ee7b7 !important;
-}
-section[data-testid="stSidebar"] [data-baseweb="notification"] p {
-    color: #fcd34d !important;
+section[data-testid="stSidebar"] [data-testid="stAlert"] p,
+section[data-testid="stSidebar"] [data-baseweb="notification"] p,
+section[data-testid="stSidebar"] [data-baseweb="notification"] span {
+    color: #34d399 !important;
 }
 
-/* ── Primary button ──────────────────────────────────────────────── */
+/* ── Alert / Notification — dark bg fix ───────────────────────────
+   Key fix: all baseweb notifications get a dark background so text
+   is always readable regardless of its color (fixes yellow-on-yellow) */
+[data-testid="stAlert"] {
+    border-radius: 10px !important;
+    overflow: hidden !important;
+}
+/* Base: dark slate bg + left accent border for all types */
+[data-baseweb="notification"] {
+    background: #13121e !important;
+    border-radius: 10px !important;
+    border: 1px solid #252535 !important;
+    border-left: 3px solid #8b5cf6 !important;
+}
+/* ⚠️ Warning — amber */
+[data-baseweb="notification"][kind="warning"] {
+    background: #1a1400 !important;
+    border-color: #2a2000 !important;
+    border-left-color: #f59e0b !important;
+}
+[data-baseweb="notification"][kind="warning"] p,
+[data-baseweb="notification"][kind="warning"] span,
+[data-baseweb="notification"][kind="warning"] div {
+    color: #fbbf24 !important;
+}
+/* ℹ️ Info — blue */
+[data-baseweb="notification"][kind="info"] {
+    background: #00102a !important;
+    border-color: #001840 !important;
+    border-left-color: #3b82f6 !important;
+}
+[data-baseweb="notification"][kind="info"] p,
+[data-baseweb="notification"][kind="info"] span,
+[data-baseweb="notification"][kind="info"] div {
+    color: #93c5fd !important;
+}
+/* ✅ Success — emerald */
+[data-baseweb="notification"][kind="positive"] {
+    background: #001810 !important;
+    border-color: #002218 !important;
+    border-left-color: #10b981 !important;
+}
+[data-baseweb="notification"][kind="positive"] p,
+[data-baseweb="notification"][kind="positive"] span,
+[data-baseweb="notification"][kind="positive"] div {
+    color: #6ee7b7 !important;
+}
+/* ❌ Error — rose */
+[data-baseweb="notification"][kind="negative"] {
+    background: #1a0010 !important;
+    border-color: #280018 !important;
+    border-left-color: #ef4444 !important;
+}
+[data-baseweb="notification"][kind="negative"] p,
+[data-baseweb="notification"][kind="negative"] span,
+[data-baseweb="notification"][kind="negative"] div {
+    color: #fca5a5 !important;
+}
+
+/* ── Primary button ───────────────────────────────────────────────── */
 .stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #5b4cf5 0%, #7c3aed 100%) !important;
+    background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%) !important;
     border: none !important;
     border-radius: 10px !important;
     color: #fff !important;
     font-weight: 600 !important;
     letter-spacing: 0.2px !important;
-    box-shadow: 0 3px 14px rgba(91,76,245,0.38) !important;
-    transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+    box-shadow: 0 4px 18px rgba(139,92,246,0.40) !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease !important;
 }
 .stButton > button[kind="primary"]:hover {
     transform: translateY(-2px) !important;
-    box-shadow: 0 7px 22px rgba(91,76,245,0.46) !important;
+    box-shadow: 0 8px 28px rgba(139,92,246,0.55) !important;
 }
 .stButton > button[kind="primary"]:active {
-    transform: translateY(0px) !important;
+    transform: translateY(0) !important;
 }
 
-/* ── Secondary / default button ─────────────────────────────────── */
+/* ── Secondary / default button ──────────────────────────────────── */
 .stButton > button[kind="secondary"],
 .stButton > button:not([kind="primary"]) {
-    background: #fff !important;
-    border: 1.5px solid #ddd6fe !important;
+    background: #16161e !important;
+    border: 1.5px solid #2e2e45 !important;
     border-radius: 10px !important;
-    color: #5b4cf5 !important;
+    color: #a78bfa !important;
     font-weight: 500 !important;
-    transition: background 0.18s, border-color 0.18s, color 0.18s !important;
+    transition: background 0.15s, border-color 0.15s, color 0.15s !important;
 }
 .stButton > button[kind="secondary"]:hover,
 .stButton > button:not([kind="primary"]):hover {
-    background: #f5f3ff !important;
-    border-color: #5b4cf5 !important;
+    background: #1e1e2e !important;
+    border-color: #8b5cf6 !important;
+    color: #c4b5fd !important;
 }
 
 /* ── Download button ─────────────────────────────────────────────── */
 [data-testid="stDownloadButton"] > button {
+    background: #16161e !important;
+    border: 1.5px solid #2e2e45 !important;
     border-radius: 10px !important;
+    color: #a78bfa !important;
     font-weight: 500 !important;
+    transition: background 0.15s, border-color 0.15s !important;
+}
+[data-testid="stDownloadButton"] > button:hover {
+    background: #1e1e2e !important;
+    border-color: #8b5cf6 !important;
 }
 
-/* ── Tabs ────────────────────────────────────────────────────────── */
+/* ── Tabs ─────────────────────────────────────────────────────────── */
 .stTabs [data-baseweb="tab-list"] {
-    background: #ede9fe !important;
+    background: #16161e !important;
     border-radius: 12px !important;
     padding: 4px !important;
     gap: 2px !important;
@@ -118,145 +217,193 @@ section[data-testid="stSidebar"] [data-baseweb="notification"] p {
 .stTabs [data-baseweb="tab"] {
     border-radius: 9px !important;
     font-weight: 500 !important;
-    color: #7c3aed !important;
+    color: #6b6890 !important;
     border: none !important;
-    padding: 6px 14px !important;
-    transition: background 0.18s, box-shadow 0.18s !important;
+    padding: 6px 16px !important;
+    transition: background 0.15s, color 0.15s !important;
+}
+.stTabs [data-baseweb="tab"]:hover {
+    color: #a78bfa !important;
+    background: rgba(139,92,246,0.10) !important;
 }
 .stTabs [aria-selected="true"] {
-    background: #fff !important;
-    color: #5b4cf5 !important;
+    background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%) !important;
+    color: #fff !important;
     font-weight: 700 !important;
-    box-shadow: 0 1px 8px rgba(91,76,245,0.18) !important;
+    box-shadow: 0 2px 12px rgba(139,92,246,0.45) !important;
 }
 
-/* ── Progress bar ────────────────────────────────────────────────── */
+/* ── Progress bar ─────────────────────────────────────────────────── */
 .stProgress > div > div > div > div {
-    background: linear-gradient(90deg, #5b4cf5 0%, #06b6d4 100%) !important;
+    background: linear-gradient(90deg, #8b5cf6 0%, #22d3ee 100%) !important;
+    border-radius: 999px !important;
+}
+/* Track */
+.stProgress > div > div > div {
+    background: #1e1e2e !important;
     border-radius: 999px !important;
 }
 
-/* ── Metric widget ───────────────────────────────────────────────── */
+/* ── Metric widget ────────────────────────────────────────────────── */
 [data-testid="stMetric"] {
-    background: #fff;
+    background: #16161e !important;
     border-radius: 14px !important;
     padding: 14px 18px !important;
-    border: 1.5px solid #ede9fe !important;
-    box-shadow: 0 2px 10px rgba(91,76,245,0.07) !important;
+    border: 1px solid #252535 !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.35) !important;
 }
 [data-testid="stMetricValue"] {
     font-size: 1.9rem !important;
     font-weight: 800 !important;
-    color: #5b4cf5 !important;
+    color: #a78bfa !important;
 }
 [data-testid="stMetricLabel"] {
-    color: #7c3aed !important;
+    color: #6b6890 !important;
     font-weight: 600 !important;
     font-size: 0.78rem !important;
     text-transform: uppercase !important;
     letter-spacing: 0.6px !important;
 }
-
-/* ── Alert / notification ────────────────────────────────────────── */
-[data-testid="stAlert"] {
-    border-radius: 12px !important;
-    border: none !important;
+[data-testid="stMetricDelta"] {
+    color: #34d399 !important;
 }
 
-/* ── Chat messages ───────────────────────────────────────────────── */
+/* ── Chat messages ────────────────────────────────────────────────── */
 [data-testid="stChatMessage"] {
+    background: #16161e !important;
     border-radius: 14px !important;
-    margin-bottom: 6px !important;
+    border: 1px solid #252535 !important;
+    margin-bottom: 8px !important;
+}
+[data-testid="stChatMessage"] p {
+    color: #c4c0d9 !important;
 }
 
-/* ── Chat input ──────────────────────────────────────────────────── */
+/* ── Chat input ───────────────────────────────────────────────────── */
 [data-testid="stChatInput"] textarea {
     border-radius: 12px !important;
+    background: #16161e !important;
+    color: #eeeaf8 !important;
 }
 [data-testid="stChatInput"] > div {
     border-radius: 14px !important;
-    border: 2px solid #ddd6fe !important;
-    background: #fff !important;
-    box-shadow: 0 2px 12px rgba(91,76,245,0.08) !important;
+    border: 1.5px solid #2e2e45 !important;
+    background: #16161e !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.30) !important;
 }
 [data-testid="stChatInput"] > div:focus-within {
-    border-color: #5b4cf5 !important;
-    box-shadow: 0 0 0 3px rgba(91,76,245,0.13) !important;
+    border-color: #8b5cf6 !important;
+    box-shadow: 0 0 0 3px rgba(139,92,246,0.18) !important;
 }
 
-/* ── Text input / textarea ───────────────────────────────────────── */
+/* ── Text input / textarea ────────────────────────────────────────── */
 [data-testid="stTextInput"] input,
 [data-testid="stTextArea"] textarea {
+    background: #16161e !important;
+    border: 1.5px solid #2a2a3e !important;
     border-radius: 10px !important;
-    border: 1.5px solid #e5e7eb !important;
-    transition: border-color 0.18s, box-shadow 0.18s !important;
+    color: #eeeaf8 !important;
+    transition: border-color 0.15s, box-shadow 0.15s !important;
 }
 [data-testid="stTextInput"] input:focus,
 [data-testid="stTextArea"] textarea:focus {
-    border-color: #5b4cf5 !important;
-    box-shadow: 0 0 0 3px rgba(91,76,245,0.12) !important;
+    border-color: #8b5cf6 !important;
+    box-shadow: 0 0 0 3px rgba(139,92,246,0.15) !important;
+    background: #1a1a28 !important;
+}
+[data-testid="stTextInput"] label,
+[data-testid="stTextArea"] label {
+    color: #9890b8 !important;
+    font-weight: 500 !important;
 }
 
-/* ── Containers with border ──────────────────────────────────────── */
+/* ── Selectbox ────────────────────────────────────────────────────── */
+[data-testid="stSelectbox"] > div > div {
+    background: #16161e !important;
+    border: 1.5px solid #2a2a3e !important;
+    border-radius: 10px !important;
+    color: #eeeaf8 !important;
+}
+
+/* ── Checkbox ─────────────────────────────────────────────────────── */
+[data-testid="stCheckbox"] label {
+    font-weight: 500 !important;
+    color: #c4c0d9 !important;
+}
+
+/* ── Containers with border ───────────────────────────────────────── */
 [data-testid="stVerticalBlockBorderWrapper"] > div {
+    background: #16161e !important;
     border-radius: 14px !important;
-    border: 1.5px solid #ede9fe !important;
-    box-shadow: 0 2px 8px rgba(91,76,245,0.05) !important;
+    border: 1px solid #252535 !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25) !important;
 }
 
-/* ── Divider ─────────────────────────────────────────────────────── */
+/* ── Divider ──────────────────────────────────────────────────────── */
 hr {
-    border-color: #ddd6fe !important;
-    margin: 10px 0 !important;
+    border-color: #252535 !important;
+    margin: 12px 0 !important;
 }
 
-/* ── Headings ────────────────────────────────────────────────────── */
+/* ── Headings ─────────────────────────────────────────────────────── */
 h1 {
-    background: linear-gradient(135deg, #5b4cf5 20%, #7c3aed 80%);
+    background: linear-gradient(135deg, #a78bfa 0%, #22d3ee 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     font-weight: 900 !important;
     letter-spacing: -0.8px !important;
 }
-h2 { color: #2d1b69 !important; font-weight: 700 !important; }
-h3 { color: #4c1d95 !important; font-weight: 600 !important; }
+h2 { color: #c4b5fd !important; font-weight: 700 !important; }
+h3 { color: #a78bfa !important; font-weight: 600 !important; }
+h4, h5, h6 { color: #9b87d1 !important; }
 
-/* ── Expander ────────────────────────────────────────────────────── */
+/* ── Expander ─────────────────────────────────────────────────────── */
 [data-testid="stExpander"] {
+    background: #16161e !important;
     border-radius: 10px !important;
-    border: 1.5px solid #ede9fe !important;
+    border: 1px solid #252535 !important;
+}
+[data-testid="stExpander"] summary p,
+[data-testid="stExpander"] summary span {
+    color: #a78bfa !important;
+    font-weight: 500 !important;
 }
 
-/* ── Code block ──────────────────────────────────────────────────── */
+/* ── Code block ───────────────────────────────────────────────────── */
 [data-testid="stCodeBlock"] {
     border-radius: 12px !important;
+    background: #0a0a10 !important;
+}
+[data-testid="stCodeBlock"] pre {
+    background: #0a0a10 !important;
 }
 
-/* ── Selectbox / Checkbox ────────────────────────────────────────── */
-[data-testid="stCheckbox"] label {
-    font-weight: 500;
-}
-
-/* ── Caption ─────────────────────────────────────────────────────── */
+/* ── Caption ──────────────────────────────────────────────────────── */
 .stCaption, [data-testid="stCaptionContainer"] p {
-    color: #9c86e8 !important;
+    color: #5c5877 !important;
 }
 
-/* ── Form submit button ──────────────────────────────────────────── */
+/* ── Form submit button ───────────────────────────────────────────── */
 [data-testid="stFormSubmitButton"] > button {
-    background: linear-gradient(135deg, #5b4cf5 0%, #7c3aed 100%) !important;
+    background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%) !important;
     border: none !important;
     border-radius: 10px !important;
     color: #fff !important;
     font-weight: 600 !important;
-    box-shadow: 0 3px 14px rgba(91,76,245,0.38) !important;
-    transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+    box-shadow: 0 4px 18px rgba(139,92,246,0.40) !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease !important;
 }
 [data-testid="stFormSubmitButton"] > button:hover {
     transform: translateY(-2px) !important;
-    box-shadow: 0 7px 22px rgba(91,76,245,0.46) !important;
+    box-shadow: 0 8px 28px rgba(139,92,246,0.55) !important;
 }
+
+/* ── Custom scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0e0e13; }
+::-webkit-scrollbar-thumb { background: #2e2e48; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #8b5cf6; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -741,18 +888,37 @@ def render_mermaid(code: str, height: int = 430):
     code = sanitize_mermaid(code)
     if not code:
         return
-    uid     = abs(hash(code)) % 99999
-    code_js = json.dumps(code)
+    # HTML-escape for safe embedding inside <div> (& and < are the critical ones)
+    code_html = code.replace("&", "&amp;").replace("<", "&lt;")
     html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-<style>body{{margin:0;padding:6px;background:#fff;}}#err{{color:#c00;font-size:12px;}}svg{{max-width:100%;height:auto;}}</style>
-</head><body><div id="g{uid}"></div><div id="err"></div>
+<style>
+  body{{margin:0;padding:10px;background:#16161e;font-family:sans-serif;}}
+  #err{{color:#f87171;font-size:12px;padding:4px;}}
+  svg{{max-width:100%;height:auto;border-radius:8px;}}
+</style>
+</head><body>
+<div class="mermaid">{code_html}</div>
+<div id="err"></div>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"
-  onload="go()" onerror="document.getElementById('err').textContent='CDN加载失败'"></script>
+  onerror="document.getElementById('err').textContent='CDN加载失败，请检查网络'"></script>
 <script>
-async function go(){{
-  mermaid.initialize({{startOnLoad:false,theme:'default',securityLevel:'loose'}});
-  try{{const{{svg}}=await mermaid.render('mg{uid}',{code_js});document.getElementById('g{uid}').innerHTML=svg;}}
-  catch(e){{document.getElementById('err').textContent='语法错误: '+e.message;}}
+try {{
+  mermaid.initialize({{
+    startOnLoad: false,
+    theme: 'dark',
+    securityLevel: 'loose',
+    themeVariables: {{
+      primaryColor: '#8b5cf6', primaryTextColor: '#eeeaf8', primaryBorderColor: '#6d28d9',
+      lineColor: '#a78bfa', secondaryColor: '#1e1e2e', tertiaryColor: '#16161e',
+      edgeLabelBackground: '#1e1e2e', clusterBkg: '#1c1c28',
+      titleColor: '#c4b5fd', nodeTextColor: '#eeeaf8'
+    }}
+  }});
+  mermaid.run({{querySelector: '.mermaid'}}).catch(function(e) {{
+    document.getElementById('err').textContent = '渲染错误: ' + e.message;
+  }});
+}} catch(e) {{
+  document.getElementById('err').textContent = '初始化错误: ' + e.message;
 }}
 </script></body></html>"""
     st.components.v1.html(html, height=height, scrolling=True)
