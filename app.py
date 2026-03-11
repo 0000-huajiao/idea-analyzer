@@ -2309,62 +2309,49 @@ def render_relationship_network(idea: dict):
 """
         components.html(html, height=400)
 
-    # ── Relationship table ──
+    # ── Relationship table (inline editable) ──
     st.markdown("---")
-    st.markdown("**人物关系列表**")
-    if rels:
-        import pandas as pd
-        df = pd.DataFrame([{
-            "人物A": r.get("from",""), "关系": r.get("type",""),
-            "人物B": r.get("to",""),   "描述": r.get("desc","")
-        } for r in rels])
-        st.dataframe(df, use_container_width=True, hide_index=True)
-        st.markdown("**删除关系：**")
-        for i, r in enumerate(rels):
-            rc1, rc2 = st.columns([9, 1])
-            with rc1:
-                st.caption(f"{r.get('from','')} — {r.get('type','')} → {r.get('to','')}  {r.get('desc','')}")
-            with rc2:
-                if st.button("🗑️", key=f"rel_del_{iid}_{i}"):
-                    rels.pop(i)
-                    outline["character_relationships"] = rels
-                    idea["outline"] = outline
-                    save_idea(idea)
-                    st.rerun()
-    else:
-        st.info("还没有人物关系。点击下方「＋ 添加关系」创建。")
+    st.caption("点击单元格可直接编辑；末列「✕」删除行；底部「＋」新增行")
 
-    # ── Add relation form ──
-    st.markdown("")
-    add_key = f"rel_add_open_{iid}"
-    if st.button("＋ 添加关系", key=f"rel_add_btn_{iid}"):
-        st.session_state[add_key] = True
+    import pandas as pd
+    char_names = [c.get("name", "") for c in chars if c.get("name")]
+    _rel_df = pd.DataFrame([{
+        "人物A": r.get("from", ""), "关系类型": r.get("type", ""),
+        "人物B": r.get("to", ""),   "描述":    r.get("desc", "")
+    } for r in rels]) if rels else pd.DataFrame(columns=["人物A", "关系类型", "人物B", "描述"])
 
-    if st.session_state.get(add_key):
-        char_names = [c.get("name","") for c in chars if c.get("name")]
-        with st.container(border=True):
-            st.markdown("**新增关系**")
-            ra1, ra2, ra3 = st.columns(3)
-            with ra1:
-                from_char = st.selectbox("人物A", char_names, key=f"rel_from_{iid}")
-            with ra2:
-                rel_type  = st.text_input("关系类型", placeholder="如：恋人/师徒/对手", key=f"rel_type_{iid}")
-            with ra3:
-                to_char   = st.selectbox("人物B", char_names, key=f"rel_to_{iid}")
-            rel_desc = st.text_input("关系描述（可选）", key=f"rel_desc_{iid}")
-            rb1, rb2 = st.columns(2)
-            with rb1:
-                if st.button("💾 保存关系", type="primary", use_container_width=True, key=f"rel_save_{iid}"):
-                    rels.append({"from": from_char, "to": to_char, "type": rel_type, "desc": rel_desc})
-                    outline["character_relationships"] = rels
-                    idea["outline"] = outline
-                    save_idea(idea)
-                    st.session_state[add_key] = False
-                    st.rerun()
-            with rb2:
-                if st.button("取消", use_container_width=True, key=f"rel_cancel_{iid}"):
-                    st.session_state[add_key] = False
-                    st.rerun()
+    _editor_key = f"rel_editor_{iid}"
+    _edited_df = st.data_editor(
+        _rel_df,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="dynamic",
+        column_config={
+            "人物A":  st.column_config.SelectboxColumn("人物A",  options=char_names, width="small"),
+            "人物B":  st.column_config.SelectboxColumn("人物B",  options=char_names, width="small"),
+            "关系类型": st.column_config.TextColumn("关系类型", width="small"),
+            "描述":   st.column_config.TextColumn("描述",    width="medium"),
+        },
+        key=_editor_key,
+    )
+    _estate = st.session_state.get(_editor_key, {})
+    if _estate.get("edited_rows") or _estate.get("added_rows") or _estate.get("deleted_rows"):
+        _new_rels = []
+        for _, row in _edited_df.iterrows():
+            _fc = str(row.get("人物A", "") or "").strip()
+            _tc = str(row.get("人物B", "") or "").strip()
+            if _fc and _tc:
+                _new_rels.append({
+                    "from": _fc,
+                    "type": str(row.get("关系类型", "") or "").strip(),
+                    "to":   _tc,
+                    "desc": str(row.get("描述", "") or "").strip(),
+                })
+        outline["character_relationships"] = _new_rels
+        idea["outline"] = outline
+        save_idea(idea)
+        st.toast("关系已更新 ✓")
+        st.rerun()
 
 
 # ─── Literature mode workspace ────────────────────────────────────────────────
