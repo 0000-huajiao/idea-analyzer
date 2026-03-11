@@ -2026,27 +2026,17 @@ def _workspace_product(idea: dict):
                                    file_name=f"{idea['title']}_PRD.md", mime="text/markdown",
                                    use_container_width=True)
             with st.expander("🔄 更多导出格式"):
-                _efmt = st.radio("选择格式", ["🖨️ HTML（可打印为PDF）", "🔷 Confluence Wiki", "📝 Notion（Markdown）"],
-                                 horizontal=True, key="prd_export_fmt", label_visibility="collapsed")
                 _etitle = idea.get("title", "需求文档")
-                if _efmt == "🖨️ HTML（可打印为PDF）":
-                    st.caption("下载 HTML 后用浏览器打开，Ctrl+P → 另存为 PDF")
-                    st.download_button("⬇️ 下载 HTML", data=prd_to_html(idea),
+                _ec1, _ec2 = st.columns(2)
+                with _ec1:
+                    st.download_button("🖨️ HTML（可打印为PDF）", data=prd_to_html(idea),
                                        file_name=f"{_etitle}_PRD.html", mime="text/html",
-                                       use_container_width=True)
-                elif _efmt == "🔷 Confluence Wiki":
-                    st.caption("复制内容到 Confluence 页面编辑器（Wiki 标记模式）粘贴即可")
-                    conf_text = prd_to_confluence_wiki(idea)
-                    st.text_area("Confluence Wiki 内容", value=conf_text, height=220, key="prd_conf_txt")
-                    st.download_button("⬇️ 下载 .txt", data=conf_text,
+                                       use_container_width=True, key="prd_dl_html")
+                with _ec2:
+                    st.download_button("🔷 Confluence Wiki (.txt)", data=prd_to_confluence_wiki(idea),
                                        file_name=f"{_etitle}_PRD_confluence.txt", mime="text/plain",
-                                       use_container_width=True)
-                else:  # Notion
-                    st.caption("Notion 原生支持 Markdown 导入：新建页面 → 点右上角「···」→ Import → Markdown & CSV")
-                    st.download_button("⬇️ 下载 Markdown（Notion 导入用）",
-                                       data=prd_to_md(idea.get("prd", {}), full=True),
-                                       file_name=f"{_etitle}_PRD_notion.md", mime="text/markdown",
-                                       use_container_width=True)
+                                       use_container_width=True, key="prd_dl_conf")
+                st.caption("HTML：用浏览器打开后 Ctrl+P 另存为 PDF　|　Confluence：粘贴到页面编辑器 Wiki 标记模式　|　Notion：直接导入上方 Markdown 文件")
             if st.session_state.get("suggest_flow_refresh"):
                 st.info("PRD已更新，建议同步刷新流程图。")
                 if st.button("🔄 立即刷新流程图"):
@@ -2320,17 +2310,19 @@ def render_relationship_network(idea: dict):
         "人物B": r.get("to", ""),   "描述":    r.get("desc", "")
     } for r in rels]) if rels else pd.DataFrame(columns=["人物A", "关系类型", "人物B", "描述"])
 
-    _editor_key = f"rel_editor_{iid}"
-    _edited_df = st.data_editor(
+    # 版本号换 key，rerun 后旧 key 不存在 → 不会再次触发保存
+    _rel_ver     = st.session_state.get(f"rel_ver_{iid}", 0)
+    _editor_key  = f"rel_editor_{iid}_v{_rel_ver}"
+    _edited_df   = st.data_editor(
         _rel_df,
         use_container_width=True,
         hide_index=True,
         num_rows="dynamic",
         column_config={
-            "人物A":  st.column_config.SelectboxColumn("人物A",  options=char_names, width="small"),
-            "人物B":  st.column_config.SelectboxColumn("人物B",  options=char_names, width="small"),
+            "人物A":   st.column_config.SelectboxColumn("人物A",   options=char_names, width="small"),
+            "人物B":   st.column_config.SelectboxColumn("人物B",   options=char_names, width="small"),
             "关系类型": st.column_config.TextColumn("关系类型", width="small"),
-            "描述":   st.column_config.TextColumn("描述",    width="medium"),
+            "描述":    st.column_config.TextColumn("描述",     width="medium"),
         },
         key=_editor_key,
     )
@@ -2350,6 +2342,7 @@ def render_relationship_network(idea: dict):
         outline["character_relationships"] = _new_rels
         idea["outline"] = outline
         save_idea(idea)
+        st.session_state[f"rel_ver_{iid}"] = _rel_ver + 1  # 换 key，打破循环
         st.toast("关系已更新 ✓")
         st.rerun()
 
@@ -2442,27 +2435,17 @@ def _workspace_literature(idea: dict):
                 use_container_width=True,
             )
             with st.expander("🔄 更多导出格式"):
-                _efmt_l = st.radio("选择格式", ["🖨️ HTML（可打印为PDF）", "🔷 Confluence Wiki", "📝 Notion（Markdown）"],
-                                   horizontal=True, key="lit_export_fmt", label_visibility="collapsed")
                 _ltitle = idea.get("title", "创作蓝图")
-                if _efmt_l == "🖨️ HTML（可打印为PDF）":
-                    st.caption("下载 HTML 后用浏览器打开，Ctrl+P → 另存为 PDF")
-                    st.download_button("⬇️ 下载 HTML", data=lit_to_html(idea),
+                _lc1, _lc2 = st.columns(2)
+                with _lc1:
+                    st.download_button("🖨️ HTML（可打印为PDF）", data=lit_to_html(idea),
                                        file_name=f"{_ltitle}_创作蓝图.html", mime="text/html",
-                                       use_container_width=True)
-                elif _efmt_l == "🔷 Confluence Wiki":
-                    st.caption("复制内容到 Confluence 页面编辑器（Wiki 标记模式）粘贴即可")
-                    conf_text = lit_to_confluence_wiki(idea)
-                    st.text_area("Confluence Wiki 内容", value=conf_text, height=220, key="lit_conf_txt")
-                    st.download_button("⬇️ 下载 .txt", data=conf_text,
+                                       use_container_width=True, key="lit_dl_html")
+                with _lc2:
+                    st.download_button("🔷 Confluence Wiki (.txt)", data=lit_to_confluence_wiki(idea),
                                        file_name=f"{_ltitle}_创作蓝图_confluence.txt", mime="text/plain",
-                                       use_container_width=True)
-                else:
-                    st.caption("Notion 原生支持 Markdown 导入：新建页面 → 点右上角「···」→ Import → Markdown & CSV")
-                    st.download_button("⬇️ 下载 Markdown（Notion 导入用）",
-                                       data=lit_export_md(idea),
-                                       file_name=f"{_ltitle}_创作蓝图_notion.md", mime="text/markdown",
-                                       use_container_width=True)
+                                       use_container_width=True, key="lit_dl_conf")
+                st.caption("HTML：用浏览器打开后 Ctrl+P 另存为 PDF　|　Confluence：粘贴到页面编辑器 Wiki 标记模式　|　Notion：直接导入上方 Markdown 文件")
             st.markdown("---")
             preview = outline_to_md(idea.get("outline", {}), section="full")
             if preview.startswith("_大纲"):
