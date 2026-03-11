@@ -2385,6 +2385,7 @@ def _workspace_literature(idea: dict):
 
         with tab_story:
             b1, b2 = st.columns(2)
+            _pending_key = f"lit_pending_sync_{idea['id']}"
             with b1:
                 edit_lbl = "✅ 完成编辑" if st.session_state.edit_mode else "✏️ 手动编辑大纲"
                 if st.button(edit_lbl, use_container_width=True, key="lit_edit_btn"):
@@ -2392,10 +2393,10 @@ def _workspace_literature(idea: dict):
                         old_outline = idea.pop("_edit_snapshot", {})
                         changed     = _compute_outline_diff(old_outline, idea.get("outline", {}))
                         if changed:
-                            _append_edit_notification(idea, changed)
-                            st.session_state.processing = True
+                            # 只保存，不自动触发 AI；把变更字段存起来等用户手动同步
+                            st.session_state[_pending_key] = changed
                         save_idea(idea)
-                        st.toast("保存成功 ✓")
+                        st.toast("保存成功 ✓ 如需通知AI同步，点击「同步到AI」")
                     else:
                         idea["_edit_snapshot"] = json.loads(
                             json.dumps(idea.get("outline", {}), ensure_ascii=False)
@@ -2407,6 +2408,14 @@ def _workspace_literature(idea: dict):
                                    file_name=f"{idea['title']}_创作蓝图.md",
                                    mime="text/markdown", use_container_width=True,
                                    key="lit_dl_story")
+            # 待同步提示 + 手动同步按钮
+            if st.session_state.get(_pending_key) and not st.session_state.edit_mode:
+                st.warning("大纲已修改，尚未通知 AI。")
+                if st.button("🔄 同步变更到AI", type="primary", use_container_width=True, key="lit_sync_ai"):
+                    _append_edit_notification(idea, st.session_state[_pending_key])
+                    st.session_state.pop(_pending_key, None)
+                    st.session_state.processing = True
+                    st.rerun()
             if st.session_state.edit_mode:
                 render_outline_editor(idea)
             else:
