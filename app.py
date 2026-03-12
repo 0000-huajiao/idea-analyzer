@@ -2299,54 +2299,71 @@ def render_relationship_network(idea: dict):
 """
         components.html(html, height=400)
 
-    # ── Relationship table (inline editable) ──
+    # ── Relationship list with edit/delete ──
     st.markdown("---")
-    st.caption("点击单元格可直接编辑；末列「✕」删除行；底部「＋」新增行")
-
-    import pandas as pd
     char_names = [c.get("name", "") for c in chars if c.get("name")]
-    _rel_df = pd.DataFrame([{
-        "人物A": r.get("from", ""), "关系类型": r.get("type", ""),
-        "人物B": r.get("to", ""),   "描述":    r.get("desc", "")
-    } for r in rels]) if rels else pd.DataFrame(columns=["人物A", "关系类型", "人物B", "描述"])
+    edit_rel_idx = st.session_state.get(f"rel_edit_idx_{iid}", -1)  # -1=列表, -2=新增, >=0=编辑第N条
 
-    # 版本号换 key，rerun 后旧 key 不存在 → 不会再次触发保存
-    _rel_ver     = st.session_state.get(f"rel_ver_{iid}", 0)
-    _editor_key  = f"rel_editor_{iid}_v{_rel_ver}"
-    if char_names:
-        st.caption("人物名参考：" + "、".join(char_names))
-    _edited_df   = st.data_editor(
-        _rel_df,
-        use_container_width=True,
-        hide_index=True,
-        num_rows="dynamic",
-        column_config={
-            "人物A":   st.column_config.TextColumn("人物A",   width="small"),
-            "人物B":   st.column_config.TextColumn("人物B",   width="small"),
-            "关系类型": st.column_config.TextColumn("关系类型", width="small"),
-            "描述":    st.column_config.TextColumn("描述",    width="medium"),
-        },
-        key=_editor_key,
-    )
-    _estate = st.session_state.get(_editor_key, {})
-    if _estate.get("edited_rows") or _estate.get("added_rows") or _estate.get("deleted_rows"):
-        _new_rels = []
-        for _, row in _edited_df.iterrows():
-            _fc = str(row.get("人物A", "") or "").strip()
-            _tc = str(row.get("人物B", "") or "").strip()
-            if _fc and _tc:
-                _new_rels.append({
-                    "from": _fc,
-                    "type": str(row.get("关系类型", "") or "").strip(),
-                    "to":   _tc,
-                    "desc": str(row.get("描述", "") or "").strip(),
-                })
-        outline["character_relationships"] = _new_rels
-        idea["outline"] = outline
-        save_idea(idea)
-        st.session_state[f"rel_ver_{iid}"] = _rel_ver + 1  # 换 key，打破循环
-        st.toast("关系已更新 ✓")
-        st.rerun()
+    if edit_rel_idx == -1:
+        if not rels:
+            st.info("还没有人物关系。点击下方「＋ 添加关系」创建。")
+        else:
+            for i, r in enumerate(rels):
+                with st.container(border=True):
+                    rc1, rc2, rc3 = st.columns([7, 1, 1])
+                    with rc1:
+                        st.markdown(f"**{r.get('from','')}** — {r.get('type','')} → **{r.get('to','')}**")
+                        if r.get("desc"):
+                            st.caption(r["desc"])
+                    with rc2:
+                        if st.button("✏️", key=f"rel_edit_{iid}_{i}", help="编辑"):
+                            st.session_state[f"rel_edit_idx_{iid}"] = i
+                            st.rerun()
+                    with rc3:
+                        if st.button("🗑️", key=f"rel_del_{iid}_{i}", help="删除"):
+                            rels.pop(i)
+                            outline["character_relationships"] = rels
+                            idea["outline"] = outline
+                            save_idea(idea)
+                            st.rerun()
+        st.markdown("")
+        if st.button("＋ 添加关系", type="primary", key=f"rel_add_btn_{iid}"):
+            st.session_state[f"rel_edit_idx_{iid}"] = -2
+            st.rerun()
+    else:
+        is_new  = (edit_rel_idx == -2)
+        default = {} if is_new else rels[edit_rel_idx]
+        st.subheader("新增关系" if is_new else "编辑关系")
+
+        ra1, ra2, ra3 = st.columns(3)
+        with ra1:
+            _fidx = char_names.index(default.get("from","")) if default.get("from","") in char_names else 0
+            from_char = st.selectbox("人物A", char_names, index=_fidx, key=f"rel_f_from_{iid}")
+        with ra2:
+            rel_type = st.text_input("关系类型", value=default.get("type",""),
+                                     placeholder="如：恋人/师徒/对手", key=f"rel_f_type_{iid}")
+        with ra3:
+            _tidx = char_names.index(default.get("to","")) if default.get("to","") in char_names else 0
+            to_char = st.selectbox("人物B", char_names, index=_tidx, key=f"rel_f_to_{iid}")
+        rel_desc = st.text_input("关系描述（可选）", value=default.get("desc",""), key=f"rel_f_desc_{iid}")
+
+        sb1, sb2 = st.columns(2)
+        with sb1:
+            if st.button("💾 保存", type="primary", use_container_width=True, key=f"rel_save_{iid}"):
+                entry = {"from": from_char, "type": rel_type, "to": to_char, "desc": rel_desc}
+                if is_new:
+                    rels.append(entry)
+                else:
+                    rels[edit_rel_idx] = entry
+                outline["character_relationships"] = rels
+                idea["outline"] = outline
+                save_idea(idea)
+                st.session_state[f"rel_edit_idx_{iid}"] = -1
+                st.rerun()
+        with sb2:
+            if st.button("取消", use_container_width=True, key=f"rel_cancel_{iid}"):
+                st.session_state[f"rel_edit_idx_{iid}"] = -1
+                st.rerun()
 
 
 # ─── Literature mode workspace ────────────────────────────────────────────────
