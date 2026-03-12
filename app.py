@@ -2313,16 +2313,18 @@ def render_relationship_network(idea: dict):
     # 版本号换 key，rerun 后旧 key 不存在 → 不会再次触发保存
     _rel_ver     = st.session_state.get(f"rel_ver_{iid}", 0)
     _editor_key  = f"rel_editor_{iid}_v{_rel_ver}"
+    if char_names:
+        st.caption("人物名参考：" + "、".join(char_names))
     _edited_df   = st.data_editor(
         _rel_df,
         use_container_width=True,
         hide_index=True,
         num_rows="dynamic",
         column_config={
-            "人物A":   st.column_config.SelectboxColumn("人物A",   options=char_names, width="small"),
-            "人物B":   st.column_config.SelectboxColumn("人物B",   options=char_names, width="small"),
+            "人物A":   st.column_config.TextColumn("人物A",   width="small"),
+            "人物B":   st.column_config.TextColumn("人物B",   width="small"),
             "关系类型": st.column_config.TextColumn("关系类型", width="small"),
-            "描述":    st.column_config.TextColumn("描述",     width="medium"),
+            "描述":    st.column_config.TextColumn("描述",    width="medium"),
         },
         key=_editor_key,
     )
