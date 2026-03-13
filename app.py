@@ -1753,33 +1753,28 @@ def gen_world_references(idea: dict, extra_context: str = "") -> tuple[list, str
     logline = outline.get("logline", "")
 
     instructions = (
-        "你是专业的创作顾问，专门为小说作者提供真实的背景研究资料。\n\n"
+        "你是专业的创作顾问，为小说作者提供真实的背景研究资料。\n\n"
         "【核心原则】\n"
         "- 绝对不要复述用户故事里已有的设定，那些作者早就知道了\n"
-        "- 要提供作者可能不知道、但对写好这个背景极有价值的真实外部知识\n"
-        "- 内容要有深度：具体的历史事件、真实的科学数据、实际的社会规律、冷僻但有趣的细节\n\n"
-        "【不同背景对应的参考维度】\n"
-        "末日/废土背景：\n"
-        "  真实历史上的社会崩溃案例（如罗马帝国、柬埔寨、苏联解体）的具体过程\n"
-        "  传染病学中的R0值/潜伏期/传播链等实际概念\n"
-        "  灾后幸存者的真实心理创伤研究（PTSD、幸存者内疚等临床数据）\n"
-        "  历史上人类大规模迁徙、物资短缺时真实发生的社会现象\n"
-        "  实际的辐射/病毒/化学污染对人体/环境的科学影响\n"
-        "修仙/玄幻背景：\n"
-        "  道教典籍（《道德经》《抱朴子》《黄庭经》）中的真实原文引用和具体含义\n"
-        "  历史上真实存在的道家修炼方法（辟谷、胎息、内丹术）的实际操作细节\n"
-        "  中国古代真实的山川地理、洞天福地的历史记载\n"
-        "  古代炼丹术的真实化学反应和历史事故\n"
-        "科幻/未来背景：\n"
-        "  前沿科学论文中的具体数据和发现（附年份和研究机构）\n"
-        "  科幻设定在现实中的技术可行性分析\n"
-        "  太空/基因/AI等领域真实发生的里程碑事件\n"
-        "古代/历史背景：\n"
-        "  该朝代真实的政治事件、权力斗争、经济制度的具体细节\n"
-        "  当时普通人的衣食住行、物价水平、生活细节\n"
-        "  真实存在的历史人物和他们鲜为人知的一面\n\n"
-        "【输出格式】每条占一行：【分类】词条：具体解释（80字以内，要有细节，不要废话）\n"
-        "生成15-20条。直接输出，不要前缀、编号、代码块。"
+        "- 提供作者可能不知道、但对写好这个背景极有价值的真实外部知识\n"
+        "- 内容要有深度：具体历史事件、真实科学数据、实际社会规律、冷僻但有趣的细节\n\n"
+        "【分类规范】请严格使用以下分类名（根据故事背景选取适合的分类）：\n"
+        "历史事件、社会学、病理学、心理学、生态学、经济学、物理学、生物学、\n"
+        "道教修炼、道教典籍、炼丹术、神话传说、修真体系、\n"
+        "末世社会、辐射影响、军事战术、建筑防御、\n"
+        "天文学、地质学、气象学\n\n"
+        "【参考维度】\n"
+        "末日/废土：历史社会崩溃案例的具体细节、真实传染病学数据（R0/潜伏期）、"
+        "灾后幸存者心理创伤研究、辐射/污染对生态的实际影响、历史迁徙与自组织案例\n"
+        "修仙/玄幻：道教典籍原文引用（注明出处）、古代修炼方法的实际操作细节、"
+        "炼丹术真实化学反应与历史事故、《山海经》等神话地理记载\n"
+        "科幻/未来：前沿科学论文的具体发现（附年份机构）、技术可行性分析、"
+        "里程碑科技事件\n"
+        "古代/历史：真实政治事件与权力斗争细节、普通人的衣食住行与物价水平、"
+        "鲜为人知的历史细节\n\n"
+        "【输出格式】每条一行：【分类名】词条：具体解释（80字以内，要有细节数据）\n"
+        "生成30条以上，同一分类的词条连续排列（便于分组）。\n"
+        "直接输出，不要前缀说明、编号、代码块。"
     )
     user_msg = f"故事背景：\n- 类型与风格：{genre}\n- 世界观：{world}\n- 故事核心：{logline}"
     if extra_context:
@@ -1827,6 +1822,52 @@ def gen_world_references(idea: dict, extra_context: str = "") -> tuple[list, str
         return items, ""
     except Exception as e:
         return [], str(e)
+
+def gen_more_references(idea: dict, category: str, existing: list, extra_context: str = "") -> tuple[list, str]:
+    """为指定分类追加更多参考词条，不与已有词条重复。"""
+    outline  = idea.get("outline", {})
+    genre    = outline.get("genre", "")
+    world    = outline.get("world", "")
+    existing_str = "\n".join(existing[:20])
+
+    sys_prompt = (
+        f"你是专业的创作顾问，为作者提供「{category}」方向的深度参考资料。\n"
+        "要求：\n"
+        f"1. 生成10-15条关于「{category}」的词条，不得与已有词条重复\n"
+        "2. 内容比已有词条更深入、更具体，要有真实数据/事件/原文引用\n"
+        f"3. 每条格式：【{category}】词条：解释（80字以内）\n"
+        "4. 直接输出，不要前缀说明，不要编号\n\n"
+        f"已有词条（禁止重复）：\n{existing_str}"
+    )
+    user_msg = f"故事背景：{genre}，{world}"
+    if extra_context:
+        user_msg += f"，补充：{extra_context}"
+
+    try:
+        if can_websearch():
+            raw = call_responses_api(instructions=sys_prompt, user_input=user_msg)
+        elif has_search_api():
+            search_results = search_web(f"{category} {genre} 真实案例 数据", n=5)
+            if search_results and not search_results.startswith("[搜索失败"):
+                user_msg += f"\n\n【搜索参考】\n{search_results}"
+            raw = call_api([{"role": "system", "content": sys_prompt},
+                            {"role": "user",   "content": user_msg}])
+        else:
+            raw = call_api([{"role": "system", "content": sys_prompt},
+                            {"role": "user",   "content": user_msg}])
+        if not raw or not raw.strip():
+            return [], "API 返回为空"
+        items = []
+        for line in raw.splitlines():
+            line = line.strip().lstrip("-•·123456789. ")
+            if re.match(r"^【.+】.+[：:]", line):
+                items.append(line)
+        if not items:
+            items = [l.strip() for l in raw.splitlines() if l.strip() and len(l.strip()) > 4]
+        return items, ""
+    except Exception as e:
+        return [], str(e)
+
 
 # ─── Edit diff & AI sync helpers ─────────────────────────────────────────────
 def _compute_prd_diff(old: dict, new: dict) -> list[str]:
@@ -2816,31 +2857,32 @@ def _workspace_literature(idea: dict):
                 st.markdown(md)
 
         with tab_refs:
-            _outline_r  = idea.get("outline", {})
+            _outline_r = idea.get("outline", {})
             _world_text = _outline_r.get("world", "") or _outline_r.get("genre", "")
-            # 检测是否可能是古代背景
             _ancient_kw = ["古代", "古风", "历史", "朝代", "王朝", "封建", "架空历史",
                            "唐", "宋", "明", "清", "汉", "秦", "三国", "隋", "元"]
             _is_ancient = any(kw in (_world_text + _outline_r.get("genre","")) for kw in _ancient_kw)
+            _refs_key   = f"refs_{idea['id']}"
 
+            # ── 生成控制区 ──
             st.markdown("#### 🌍 世界观参考资料")
             if can_websearch():
-                st.caption("🔍 火山引擎联网搜索已启用，将基于实时资料生成精准词条。")
+                st.caption("🔍 火山引擎联网搜索已启用")
             elif has_search_api():
-                st.caption(f"🔍 {st.session_state.get('search_provider','')} 搜索已启用，将先联网检索再整理词条。")
+                st.caption(f"🔍 {st.session_state.get('search_provider','')} 搜索已启用")
             else:
-                st.caption("💡 在侧边栏配置搜索 API（Tavily/Serper/Brave）可获得更精准的参考资料，当前使用AI训练知识。")
+                st.caption("💡 配置搜索 API 可获得更精准的参考资料，当前使用AI训练知识。")
 
             with st.container(border=True):
                 if _is_ancient:
                     st.info("检测到古代/历史背景 📜")
-                    _dynasty = st.text_input("具体朝代或时期（可选，留空则由AI判断）",
+                    _dynasty = st.text_input("具体朝代或时期（可选）",
                                              placeholder="如：唐朝 / 北宋末年 / 架空秦汉",
                                              key=f"refs_dynasty_{idea['id']}")
                     _extra = _dynasty
                 else:
                     _extra = st.text_input("补充说明（可选）",
-                                           placeholder="如：近未来、赛博朋克风、魔法体系以元素为核心",
+                                           placeholder="如：近未来赛博朋克、魔法体系以元素为核心",
                                            key=f"refs_extra_{idea['id']}")
 
                 if st.button("✨ 生成世界观参考资料", type="primary", use_container_width=True,
@@ -2855,32 +2897,96 @@ def _workspace_literature(idea: dict):
                     _refs, _err = gen_world_references(idea, _extra_val)
                 st.session_state[f"refs_loading_{idea['id']}"] = False
                 if _refs:
-                    _outline_r["references"] = _refs
+                    # 追加而不是替换（已有词条保留）
+                    _existing = _outline_r.get("references", [])
+                    _existing_set = set(_existing)
+                    _new = [r for r in _refs if r not in _existing_set]
+                    _outline_r["references"] = _existing + _new
                     idea["outline"] = _outline_r
                     save_idea(idea)
                     st.rerun()
                 else:
                     st.error(f"生成失败：{_err or '返回内容无法解析，请重试'}")
 
-            _refs_data = _outline_r.get("references", [])
-            if _refs_data:
-                st.markdown("---")
-                # 按【分类】分组显示
-                _groups: dict = {}
+            _refs_data = list(_outline_r.get("references", []))
+
+            if not _refs_data:
+                st.info("点击上方按钮，AI 将根据你的世界观生成专属参考资料。")
+            else:
+                # ── 按【分类】分组 ──
+                _groups: dict[str, list] = {}
+                _ungrouped = []
                 for _item in _refs_data:
                     _m = re.match(r"^【(.+?)】(.+)$", str(_item))
                     if _m:
-                        _cat, _body = _m.group(1), _m.group(2)
-                        _groups.setdefault(_cat, []).append(_body)
+                        _groups.setdefault(_m.group(1), []).append(_item)
                     else:
-                        _groups.setdefault("其他", []).append(str(_item))
+                        _ungrouped.append(_item)
+                if _ungrouped:
+                    _groups["其他"] = _ungrouped
+
                 for _cat, _items in _groups.items():
-                    st.markdown(f"**{_cat}**")
-                    for _it in _items:
-                        st.markdown(f"- {_it}")
-                    st.markdown("")
-            else:
-                st.info("点击上方按钮，AI 将根据你的世界观生成专属参考资料。")
+                    with st.container(border=True):
+                        st.markdown(f"**{_cat}**")
+                        for _item in list(_items):
+                            _ic1, _ic2 = st.columns([11, 1])
+                            with _ic1:
+                                # 去掉【分类】前缀只显示词条内容
+                                _display = re.sub(r"^【.+?】", "", _item).strip()
+                                st.markdown(f"• {_display}")
+                            with _ic2:
+                                _del_key = f"refdel_{idea['id']}_{hash(_item) & 0xFFFFFF}"
+                                if st.button("🗑️", key=_del_key, help="删除此词条"):
+                                    _refs_data.remove(_item)
+                                    _outline_r["references"] = _refs_data
+                                    idea["outline"] = _outline_r
+                                    save_idea(idea)
+                                    st.rerun()
+
+                        # 该分类下的"检索更多"
+                        _more_key = f"refs_more_{idea['id']}_{_cat}"
+                        if st.button(f"🔍 检索更多「{_cat}」词条", key=f"btn_{_more_key}",
+                                     use_container_width=True):
+                            st.session_state[_more_key] = True
+                            st.rerun()
+                        if st.session_state.get(_more_key):
+                            with st.spinner(f"正在检索更多「{_cat}」词条..."):
+                                _more, _merr = gen_more_references(idea, _cat, _items)
+                            st.session_state[_more_key] = False
+                            if _more:
+                                _exist_set = set(_refs_data)
+                                _refs_data += [r for r in _more if r not in _exist_set]
+                                _outline_r["references"] = _refs_data
+                                idea["outline"] = _outline_r
+                                save_idea(idea)
+                                st.rerun()
+                            else:
+                                st.error(f"检索失败：{_merr}")
+
+                # ── 手动新增 ──
+                st.markdown("---")
+                st.markdown("**＋ 手动新增词条**")
+                _mc1, _mc2, _mc3 = st.columns([2, 5, 1])
+                with _mc1:
+                    _new_cat = st.text_input("分类", placeholder="如：历史事件",
+                                             key=f"refs_new_cat_{idea['id']}",
+                                             label_visibility="collapsed")
+                with _mc2:
+                    _new_body = st.text_input("词条：解释", placeholder="词条名：具体解释内容",
+                                              key=f"refs_new_body_{idea['id']}",
+                                              label_visibility="collapsed")
+                with _mc3:
+                    if st.button("＋", key=f"refs_add_{idea['id']}", type="primary",
+                                 use_container_width=True):
+                        if _new_body.strip():
+                            _cat_prefix = f"【{_new_cat.strip()}】" if _new_cat.strip() else ""
+                            _new_item = _cat_prefix + _new_body.strip()
+                            if _new_item not in _refs_data:
+                                _refs_data.append(_new_item)
+                                _outline_r["references"] = _refs_data
+                                idea["outline"] = _outline_r
+                                save_idea(idea)
+                                st.rerun()
 
         with tab_export:
             st.download_button(
