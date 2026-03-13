@@ -724,12 +724,18 @@ LIT_STAGES = [
         ),
     },
     {
-        "id": 5, "emoji": "📚", "title": "参考资料",
-        "desc": "同类作品 · 创作灵感来源",
+        "id": 5, "emoji": "📚", "title": "世界观参考",
+        "desc": "背景知识 · 专有名词 · 时代科普",
         "check": lambda o, pct: pct >= 85 and lit_field_filled(o, "references"),
         "prompt": (
-            "【当前引导阶段：第5阶段——参考资料】\n"
-            "推荐几部和这个故事风格、类型相近的作品，说明可以参考的地方。completeness 可设为 85-100。"
+            "【当前引导阶段：第5阶段——世界观参考资料】\n"
+            "根据故事的世界观背景，生成一批实用的参考资料：\n"
+            "- 科幻背景：给出科幻专有名词定义 + 现代科学术语解释\n"
+            "- 古代/历史背景：询问具体朝代后，给出该朝代重要历史事件、政策、文化科普\n"
+            "- 修仙/玄幻背景：修炼体系术语、世界规则、常见概念定义\n"
+            "- 末日/废土背景：末日场景常用概念、社会结构描述\n"
+            "- 其他背景：该类型故事最常涉及的专业背景知识和专有名词\n"
+            "以列表形式给出，每条格式：【分类】词条：解释（50字内）。completeness 可设为 85-100。"
         ),
     },
 ]
@@ -821,9 +827,11 @@ LIT_PROMPT = """你是一位经验丰富的故事编辑和创作顾问，专门�
     "characters": [
       {
         "name": "人物名",
+        "gender": "性别（男/女/不明/其他）",
         "role": "在故事中的角色定位",
         "personality": "性格特征",
-        "arc": "人物在故事中经历的变化（人物弧光）"
+        "arc": "人物在故事中经历的变化（人物弧光）",
+        "inventory": "重要随身物品（逗号分隔，只写关键道具）"
       }
     ],
     "conflict": "核心冲突（主角面临的最大阻碍是什么）",
@@ -1307,10 +1315,13 @@ def outline_to_md(outline: dict, section: str = "story") -> str:
         if chars:
             out.append("## 人物档案\n")
             for c in chars:
-                out.append(f"### {c.get('name', '人物')}")
+                _hdr = c.get('name', '人物')
+                if c.get("gender"): _hdr += f"（{c['gender']}）"
+                out.append(f"### {_hdr}")
                 if c.get("role"):        out.append(f"**角色定位：** {c['role']}")
                 if c.get("personality"): out.append(f"**性格特征：** {c['personality']}")
                 if c.get("arc"):         out.append(f"**人物弧光：** {c['arc']}")
+                if c.get("inventory"):   out.append(f"**物品栏：** {c['inventory']}")
                 out.append("")
         rels = outline.get("character_relationships", [])
         if rels:
@@ -1605,6 +1616,38 @@ def gen_test_cases(idea: dict) -> tuple[dict, str]:
         return (result, "") if result else ({}, f"解析失败：{raw[:300]}")
     except Exception as e:
         return {}, str(e)
+
+def gen_world_references(idea: dict, extra_context: str = "") -> tuple[list, str]:
+    """根据故事世界观生成背景参考资料（术语/历史/科普等），返回 (list, error_str)。"""
+    outline  = idea.get("outline", {})
+    genre    = outline.get("genre", "")
+    world    = outline.get("world", "")
+    logline  = outline.get("logline", "")
+    sys_prompt = (
+        "你是专业的创作素材整理师，擅长为不同背景设定的故事提供实用参考资料。\n"
+        "请根据故事背景，生成15-20条参考资料，每条格式严格为：\n"
+        "【分类】词条：解释（50字以内）\n\n"
+        "规则：\n"
+        "- 科幻/未来背景：科幻专有名词定义 + 相关现代科学术语\n"
+        "- 古代/历史背景：对应朝代的历史事件、政治制度、文化习俗、官职称谓\n"
+        "- 修仙/玄幻背景：修炼体系、境界划分、功法道具、门派规则\n"
+        "- 末日/废土背景：末日成因、社会结构、常见威胁、生存术语\n"
+        "- 现代都市背景：相关行业专业术语、社会背景知识\n"
+        "- 其他类型：该类型故事最常涉及的专业知识和专有名词\n"
+        "直接输出 JSON 数组，不要其他内容：[\"条目1\", \"条目2\", ...]"
+    )
+    user_msg = f"故事背景：\n- 类型与风格：{genre}\n- 世界观：{world}\n- 故事核心：{logline}"
+    if extra_context:
+        user_msg += f"\n- 补充说明：{extra_context}"
+    try:
+        raw    = call_api([{"role": "system", "content": sys_prompt},
+                           {"role": "user",   "content": user_msg}])
+        result = extract_json(raw)
+        if isinstance(result, list):
+            return result, ""
+        return [], f"格式解析失败：{raw[:300]}"
+    except Exception as e:
+        return [], str(e)
 
 # ─── Edit diff & AI sync helpers ─────────────────────────────────────────────
 def _compute_prd_diff(old: dict, new: dict) -> list[str]:
@@ -2280,9 +2323,12 @@ def render_character_profiles(idea: dict):
                             idea["outline"]       = outline
                             save_idea(idea)
                             st.rerun()
-                if c.get("role"):        st.markdown(f"**角色定位：** {c['role']}")
+                _gender_badge = f" `{c['gender']}`" if c.get("gender") else ""
+                if _gender_badge or c.get("role"):
+                    st.markdown(f"**角色定位：** {c.get('role','')}{_gender_badge}")
                 if c.get("personality"): st.markdown(f"**性格特征：** {c['personality']}")
                 if c.get("arc"):         st.markdown(f"**人物弧光：** {c['arc']}")
+                if c.get("inventory"):   st.markdown(f"**物品栏：** {c['inventory']}")
 
         st.markdown("")
         if st.button("＋ 添加人物", type="primary"):
@@ -2293,15 +2339,26 @@ def render_character_profiles(idea: dict):
         is_new = (edit_idx == -2)
         st.subheader("新增人物" if is_new else "编辑人物")
         default = {} if is_new else chars[edit_idx]
-        name        = st.text_input("姓名",     value=default.get("name", ""),        key=f"char_f_name_{iid}")
+
+        _genders = ["男", "女", "不明", "其他"]
+        _g_default = default.get("gender", "男")
+        _g_idx = _genders.index(_g_default) if _g_default in _genders else 0
+
+        cf1, cf2 = st.columns([3, 1])
+        with cf1:
+            name = st.text_input("姓名", value=default.get("name", ""), key=f"char_f_name_{iid}")
+        with cf2:
+            gender = st.selectbox("性别", _genders, index=_g_idx, key=f"char_f_gender_{iid}")
         role        = st.text_input("角色定位", value=default.get("role", ""),        key=f"char_f_role_{iid}")
         personality = st.text_input("性格特征", value=default.get("personality", ""), key=f"char_f_pers_{iid}")
-        arc         = st.text_area("人物弧光",  value=default.get("arc", ""),  height=80, key=f"char_f_arc_{iid}")
+        arc         = st.text_area("人物弧光",  value=default.get("arc", ""),   height=80, key=f"char_f_arc_{iid}")
+        inventory   = st.text_input("物品栏（重要道具，逗号分隔）", value=default.get("inventory", ""), key=f"char_f_inv_{iid}")
 
         sc1, sc2 = st.columns(2)
         with sc1:
             if st.button("💾 保存", type="primary", use_container_width=True):
-                entry = {"name": name, "role": role, "personality": personality, "arc": arc}
+                entry = {"name": name, "gender": gender, "role": role,
+                         "personality": personality, "arc": arc, "inventory": inventory}
                 if is_new:
                     chars.append(entry)
                 else:
@@ -2510,11 +2567,66 @@ def _workspace_literature(idea: dict):
                 st.markdown(md)
 
         with tab_refs:
-            md = outline_to_md(idea.get("outline", {}), section="refs")
-            if md.startswith("_大纲"):
-                st.info("参考资料将在对话后期自动推荐。")
+            _outline_r  = idea.get("outline", {})
+            _world_text = _outline_r.get("world", "") or _outline_r.get("genre", "")
+            # 检测是否可能是古代背景
+            _ancient_kw = ["古代", "古风", "历史", "朝代", "王朝", "封建", "架空历史",
+                           "唐", "宋", "明", "清", "汉", "秦", "三国", "隋", "元"]
+            _is_ancient = any(kw in (_world_text + _outline_r.get("genre","")) for kw in _ancient_kw)
+
+            st.markdown("#### 🌍 世界观参考资料")
+            st.caption("AI 根据你的故事背景生成专属的术语定义、历史科普、背景知识等，供创作时参考。")
+
+            with st.container(border=True):
+                if _is_ancient:
+                    st.info("检测到古代/历史背景 📜")
+                    _dynasty = st.text_input("具体朝代或时期（可选，留空则由AI判断）",
+                                             placeholder="如：唐朝 / 北宋末年 / 架空秦汉",
+                                             key=f"refs_dynasty_{idea['id']}")
+                    _extra = _dynasty
+                else:
+                    _extra = st.text_input("补充说明（可选）",
+                                           placeholder="如：近未来、赛博朋克风、魔法体系以元素为核心",
+                                           key=f"refs_extra_{idea['id']}")
+
+                if st.button("✨ 生成世界观参考资料", type="primary", use_container_width=True,
+                             key=f"refs_gen_{idea['id']}"):
+                    st.session_state[f"refs_loading_{idea['id']}"] = True
+                    st.session_state[f"refs_extra_{idea['id']}_val"] = _extra
+                    st.rerun()
+
+            if st.session_state.get(f"refs_loading_{idea['id']}"):
+                with st.spinner("AI 正在整理世界观参考资料..."):
+                    _extra_val = st.session_state.get(f"refs_extra_{idea['id']}_val", "")
+                    _refs, _err = gen_world_references(idea, _extra_val)
+                    if _refs:
+                        _outline_r["references"] = _refs
+                        idea["outline"] = _outline_r
+                        save_idea(idea)
+                    else:
+                        st.error(f"生成失败：{_err}")
+                st.session_state[f"refs_loading_{idea['id']}"] = False
+                st.rerun()
+
+            _refs_data = _outline_r.get("references", [])
+            if _refs_data:
+                st.markdown("---")
+                # 按【分类】分组显示
+                _groups: dict = {}
+                for _item in _refs_data:
+                    _m = re.match(r"^【(.+?)】(.+)$", str(_item))
+                    if _m:
+                        _cat, _body = _m.group(1), _m.group(2)
+                        _groups.setdefault(_cat, []).append(_body)
+                    else:
+                        _groups.setdefault("其他", []).append(str(_item))
+                for _cat, _items in _groups.items():
+                    st.markdown(f"**{_cat}**")
+                    for _it in _items:
+                        st.markdown(f"- {_it}")
+                    st.markdown("")
             else:
-                st.markdown(md)
+                st.info("点击上方按钮，AI 将根据你的世界观生成专属参考资料。")
 
         with tab_export:
             st.download_button(
