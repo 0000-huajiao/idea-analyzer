@@ -1618,30 +1618,37 @@ def gen_test_cases(idea: dict) -> tuple[dict, str]:
         return {}, str(e)
 
 def gen_world_references(idea: dict, extra_context: str = "") -> tuple[list, str]:
-    """根据故事世界观生成背景参考资料（术语/历史/科普等），返回 (list, error_str)。"""
-    outline  = idea.get("outline", {})
-    genre    = outline.get("genre", "")
-    world    = outline.get("world", "")
-    logline  = outline.get("logline", "")
-    sys_prompt = (
-        "你是专业的创作素材整理师，擅长为不同背景设定的故事提供实用参考资料。\n"
-        "请根据故事背景，生成15-20条参考资料，每条格式严格为：\n"
-        "【分类】词条：解释（50字以内）\n\n"
-        "规则：\n"
-        "- 科幻/未来背景：科幻专有名词定义 + 相关现代科学术语\n"
-        "- 古代/历史背景：对应朝代的历史事件、政治制度、文化习俗、官职称谓\n"
-        "- 修仙/玄幻背景：修炼体系、境界划分、功法道具、门派规则\n"
-        "- 末日/废土背景：末日成因、社会结构、常见威胁、生存术语\n"
-        "- 现代都市背景：相关行业专业术语、社会背景知识\n"
-        "- 其他类型：该类型故事最常涉及的专业知识和专有名词\n"
-        "直接输出 JSON 数组，不要其他内容：[\"条目1\", \"条目2\", ...]"
+    """根据故事世界观联网搜索并生成背景参考资料，返回 (list, error_str)。"""
+    outline = idea.get("outline", {})
+    genre   = outline.get("genre", "")
+    world   = outline.get("world", "")
+    logline = outline.get("logline", "")
+
+    instructions = (
+        "你是专业的创作素材整理师。用户会给你故事的世界观设定，"
+        "请联网搜索相关真实背景资料，然后整理成15-20条精准的参考词条。\n"
+        "每条格式严格为：【分类】词条：解释（60字以内，引用真实资料）\n"
+        "分类规则：\n"
+        "- 科幻/未来：搜索相关现代科学术语、物理/生物/技术概念的准确定义\n"
+        "- 古代/历史：搜索对应朝代的真实历史事件、政治制度、文化习俗、官职体系\n"
+        "- 修仙/玄幻：搜索道教/佛教典籍中的真实术语、古代修炼文化背景\n"
+        "- 末日/废土：搜索灾难学、社会学、生存学相关真实概念\n"
+        "- 其他类型：搜索该背景最相关的专业领域知识\n"
+        "最后只输出 JSON 数组，不要其他内容：[\"条目1\", \"条目2\", ...]"
     )
     user_msg = f"故事背景：\n- 类型与风格：{genre}\n- 世界观：{world}\n- 故事核心：{logline}"
     if extra_context:
-        user_msg += f"\n- 补充说明：{extra_context}"
+        user_msg += f"\n- 补充说明（请重点围绕此内容搜索）：{extra_context}"
+
     try:
-        raw    = call_api([{"role": "system", "content": sys_prompt},
-                           {"role": "user",   "content": user_msg}])
+        if st.session_state.get("cfg_websearch"):
+            raw = call_responses_api(instructions=instructions, user_input=user_msg)
+        else:
+            # 无联网时降级到普通 API
+            raw = call_api([
+                {"role": "system", "content": instructions},
+                {"role": "user",   "content": user_msg},
+            ])
         result = extract_json(raw)
         if isinstance(result, list):
             return result, ""
@@ -2575,7 +2582,10 @@ def _workspace_literature(idea: dict):
             _is_ancient = any(kw in (_world_text + _outline_r.get("genre","")) for kw in _ancient_kw)
 
             st.markdown("#### 🌍 世界观参考资料")
-            st.caption("AI 根据你的故事背景生成专属的术语定义、历史科普、背景知识等，供创作时参考。")
+            if st.session_state.get("cfg_websearch"):
+                st.caption("🔍 已启用联网搜索，将基于真实资料生成精准词条。")
+            else:
+                st.caption("💡 建议在左侧侧边栏开启「联网搜索」以获得更精准的参考资料。")
 
             with st.container(border=True):
                 if _is_ancient:
