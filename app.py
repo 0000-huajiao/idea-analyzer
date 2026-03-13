@@ -947,6 +947,13 @@ def get_client() -> openai.OpenAI:
 def get_model() -> str:
     return st.session_state.get("cfg_model", "gpt-4o")
 
+def can_websearch() -> bool:
+    """联网搜索仅火山引擎 Ark 平台支持，需同时开启开关且使用 Ark 地址。"""
+    return (
+        st.session_state.get("cfg_websearch", False)
+        and "volces.com" in st.session_state.get("cfg_base", "")
+    )
+
 def call_api(messages: list) -> str:
     client   = get_client()
     last_err = None
@@ -1585,7 +1592,7 @@ def gen_flowchart(idea: dict) -> str:
 def gen_competitor(idea: dict) -> tuple[dict, str]:
     prd_text = prd_to_md(idea.get("prd", {}))
     try:
-        if st.session_state.get("cfg_websearch"):
+        if can_websearch():
             raw = call_responses_api(
                 instructions=COMPETITOR_PROMPT,
                 user_input=f"请联网搜索并分析以下产品的竞品：\n\n{prd_text}",
@@ -1644,7 +1651,7 @@ def gen_world_references(idea: dict, extra_context: str = "") -> tuple[list, str
         user_msg += f"\n- 补充说明：{extra_context}"
 
     try:
-        if st.session_state.get("cfg_websearch"):
+        if can_websearch():
             raw = call_responses_api(instructions=instructions, user_input=user_msg)
         else:
             raw = call_api([
@@ -2204,8 +2211,7 @@ def _workspace_product(idea: dict):
                 st.info("流程图将在对话开始后自动生成，也可点击上方按钮手动刷新。")
 
         with tab_comp:
-            ws = st.session_state.get("cfg_websearch", False)
-            st.caption("🌐 联网实时搜索" if ws else "📚 基于AI训练知识（可在侧边栏开启联网搜索）")
+            st.caption("🌐 联网实时搜索" if can_websearch() else "📚 基于AI训练知识（切换到火山引擎Ark并开启联网搜索可获得实时数据）")
             if st.button("🔍 分析竞品与落地可行性", type="primary", use_container_width=True):
                 st.session_state.comp_loading = True
                 st.session_state.comp_error   = ""
@@ -2664,10 +2670,10 @@ def _workspace_literature(idea: dict):
             _is_ancient = any(kw in (_world_text + _outline_r.get("genre","")) for kw in _ancient_kw)
 
             st.markdown("#### 🌍 世界观参考资料")
-            if st.session_state.get("cfg_websearch"):
+            if can_websearch():
                 st.caption("🔍 已启用联网搜索，将基于真实资料生成精准词条。")
             else:
-                st.caption("💡 建议在左侧侧边栏开启「联网搜索」以获得更精准的参考资料。")
+                st.caption("💡 切换到火山引擎 Ark 并开启「联网搜索」可获得更精准的参考资料，当前使用AI训练知识。")
 
             with st.container(border=True):
                 if _is_ancient:
