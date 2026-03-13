@@ -524,7 +524,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**🔍 搜索增强（可选）**")
     st.caption("配置后可用于参考资料生成和竞品分析，非火山引擎用户也能享受联网搜索")
-    _search_providers = ["不使用", "Tavily", "Serper（Google）", "Brave Search"]
+    _search_providers = ["不使用", "博查 Bocha", "Tavily", "Serper（Google）", "Brave Search"]
     _saved_sp = st.session_state.get("search_provider", "不使用")
     _sel_sp = st.selectbox("搜索服务商", _search_providers,
                            index=_search_providers.index(_saved_sp) if _saved_sp in _search_providers else 0,
@@ -532,6 +532,7 @@ with st.sidebar:
     st.session_state.search_provider = _sel_sp
     if _sel_sp != "不使用":
         _sp_links = {
+            "博查 Bocha":     "https://open.bocha.cn",
             "Tavily":        "https://app.tavily.com",
             "Serper（Google）": "https://serper.dev",
             "Brave Search":  "https://api.search.brave.com",
@@ -994,7 +995,26 @@ def search_web(query: str, n: int = 8) -> str:
         return ""
     try:
         with httpx.Client(timeout=20.0) as client:
-            if provider == "Tavily":
+            if provider == "博查 Bocha":
+                r = client.post(
+                    "https://api.bocha.cn/v1/web-search",
+                    headers={"Authorization": f"Bearer {key}",
+                             "Content-Type": "application/json"},
+                    json={"query": query, "freshness": "noLimit",
+                          "summary": True, "count": n},
+                )
+                r.raise_for_status()
+                data = r.json()
+                parts = []
+                if data.get("data", {}).get("webPages", {}).get("value"):
+                    for item in data["data"]["webPages"]["value"][:n]:
+                        parts.append(f"• {item.get('name','')}: {item.get('snippet','')}")
+                elif data.get("webPages", {}).get("value"):
+                    for item in data["webPages"]["value"][:n]:
+                        parts.append(f"• {item.get('name','')}: {item.get('snippet','')}")
+                return "\n".join(parts)
+
+            elif provider == "Tavily":
                 r = client.post(
                     "https://api.tavily.com/search",
                     json={"api_key": key, "query": query, "max_results": n,
