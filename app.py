@@ -1628,34 +1628,42 @@ def gen_world_references(idea: dict, extra_context: str = "") -> tuple[list, str
     logline = outline.get("logline", "")
 
     instructions = (
-        "你是专业的创作素材整理师。用户会给你故事的世界观设定，"
-        "请联网搜索相关真实背景资料，然后整理成15-20条精准的参考词条。\n"
-        "每条格式严格为：【分类】词条：解释（60字以内，引用真实资料）\n"
+        "你是专业的创作素材整理师。根据用户的故事世界观，"
+        "生成15-20条实用的背景参考资料。\n"
+        "输出格式：每条占一行，格式为「【分类】词条：解释」，解释控制在60字以内。\n"
         "分类规则：\n"
-        "- 科幻/未来：搜索相关现代科学术语、物理/生物/技术概念的准确定义\n"
-        "- 古代/历史：搜索对应朝代的真实历史事件、政治制度、文化习俗、官职体系\n"
-        "- 修仙/玄幻：搜索道教/佛教典籍中的真实术语、古代修炼文化背景\n"
-        "- 末日/废土：搜索灾难学、社会学、生存学相关真实概念\n"
-        "- 其他类型：搜索该背景最相关的专业领域知识\n"
-        "最后只输出 JSON 数组，不要其他内容：[\"条目1\", \"条目2\", ...]"
+        "- 科幻/未来背景：相关现代科学术语、物理/生物/技术概念\n"
+        "- 古代/历史背景：对应朝代的历史事件、政治制度、文化习俗、官职体系\n"
+        "- 修仙/玄幻背景：道教/佛教典籍中的真实术语、古代修炼文化\n"
+        "- 末日/废土背景：灾难学、社会学、生存相关概念\n"
+        "- 其他类型：该背景最相关的专业领域知识\n"
+        "直接输出条目列表，不要任何前缀说明文字，不要编号，不要代码块。"
     )
     user_msg = f"故事背景：\n- 类型与风格：{genre}\n- 世界观：{world}\n- 故事核心：{logline}"
     if extra_context:
-        user_msg += f"\n- 补充说明（请重点围绕此内容搜索）：{extra_context}"
+        user_msg += f"\n- 补充说明：{extra_context}"
 
     try:
         if st.session_state.get("cfg_websearch"):
             raw = call_responses_api(instructions=instructions, user_input=user_msg)
         else:
-            # 无联网时降级到普通 API
             raw = call_api([
                 {"role": "system", "content": instructions},
                 {"role": "user",   "content": user_msg},
             ])
-        result = extract_json(raw)
-        if isinstance(result, list):
-            return result, ""
-        return [], f"格式解析失败：{raw[:300]}"
+        if not raw or not raw.strip():
+            return [], "API 返回为空"
+        # 解析：每行匹配 【分类】词条：解释 格式
+        items = []
+        for line in raw.splitlines():
+            line = line.strip().lstrip("-•·123456789. ")
+            if re.match(r"^【.+】.+[：:]", line):
+                items.append(line)
+        if items:
+            return items, ""
+        # 降级：只要非空行都收进来
+        items = [l.strip() for l in raw.splitlines() if l.strip() and len(l.strip()) > 4]
+        return items, ""
     except Exception as e:
         return [], str(e)
 
@@ -2683,14 +2691,14 @@ def _workspace_literature(idea: dict):
                 with st.spinner("AI 正在整理世界观参考资料..."):
                     _extra_val = st.session_state.get(f"refs_extra_{idea['id']}_val", "")
                     _refs, _err = gen_world_references(idea, _extra_val)
-                    if _refs:
-                        _outline_r["references"] = _refs
-                        idea["outline"] = _outline_r
-                        save_idea(idea)
-                    else:
-                        st.error(f"生成失败：{_err}")
                 st.session_state[f"refs_loading_{idea['id']}"] = False
-                st.rerun()
+                if _refs:
+                    _outline_r["references"] = _refs
+                    idea["outline"] = _outline_r
+                    save_idea(idea)
+                    st.rerun()
+                else:
+                    st.error(f"生成失败：{_err or '返回内容无法解析，请重试'}")
 
             _refs_data = _outline_r.get("references", [])
             if _refs_data:
