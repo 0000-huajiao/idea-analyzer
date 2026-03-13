@@ -1062,26 +1062,29 @@ def call_responses_api(instructions: str, user_input: str) -> str:
     raise last_err or RuntimeError("Responses API 调用失败")
 
 # ─── JSON / Mermaid helpers ───────────────────────────────────────────────────
-def extract_json(text: str) -> dict:
+def extract_json(text: str):
+    """从文本中提取 JSON（dict 或 list），返回解析结果，失败返回 {}。"""
     text = re.sub(r"```(?:json)?\s*", "", text)
     text = re.sub(r"```", "", text).strip()
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
-    depth, start = 0, -1
-    for i, ch in enumerate(text):
-        if ch == "{":
-            if depth == 0:
-                start = i
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0 and start != -1:
-                try:
-                    return json.loads(text[start : i + 1])
-                except json.JSONDecodeError:
-                    start = -1
+    # 尝试提取第一个完整的 [...] 或 {...}
+    for open_ch, close_ch in (("[", "]"), ("{", "}")):
+        depth, start = 0, -1
+        for i, ch in enumerate(text):
+            if ch == open_ch:
+                if depth == 0:
+                    start = i
+                depth += 1
+            elif ch == close_ch:
+                depth -= 1
+                if depth == 0 and start != -1:
+                    try:
+                        return json.loads(text[start : i + 1])
+                    except json.JSONDecodeError:
+                        start = -1
     return {}
 
 def sanitize_mermaid(code: str) -> str:
