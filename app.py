@@ -2393,21 +2393,62 @@ def render_relationship_network(idea: dict):
     if not chars:
         st.info("先在「👤 人物档案」Tab 添加人物，关系图谱将在这里显示。")
     else:
-        nodes_js = json.dumps(
-            [{"id": c.get("name",""), "label": c.get("name","")} for c in chars if c.get("name")],
-            ensure_ascii=False,
-        )
-        edges_js = json.dumps(
-            [{"from": r.get("from",""), "to": r.get("to",""),
-              "label": r.get("type",""), "title": r.get("desc","")} for r in rels],
-            ensure_ascii=False,
-        )
-        html = f"""
-<!DOCTYPE html><html><head>
+        # 节点：按角色定位给不同颜色，tooltip 显示性格+物品
+        _role_colors = {
+            "主角": "#8b5cf6", "主人公": "#8b5cf6",
+            "反派": "#ef4444", "villain": "#ef4444",
+            "配角": "#22d3ee", "mentor": "#f59e0b", "导师": "#f59e0b",
+        }
+        def _node_color(c):
+            role = (c.get("role") or "").lower()
+            for k, v in _role_colors.items():
+                if k in role:
+                    return v
+            return "#6d28d9"
+
+        nodes_data = []
+        for c in chars:
+            if not c.get("name"):
+                continue
+            tip_parts = []
+            if c.get("role"):        tip_parts.append(f"角色：{c['role']}")
+            if c.get("gender"):      tip_parts.append(f"性别：{c['gender']}")
+            if c.get("personality"): tip_parts.append(f"性格：{c['personality']}")
+            if c.get("inventory"):   tip_parts.append(f"物品：{c['inventory']}")
+            nodes_data.append({
+                "id":    c["name"],
+                "label": c["name"],
+                "title": "\n".join(tip_parts) or c["name"],
+                "color": {"background": _node_color(c),
+                          "border": "#1e1e2e",
+                          "highlight": {"background": "#a78bfa", "border": "#8b5cf6"}},
+            })
+
+        edges_data = []
+        for i, r in enumerate(rels):
+            if r.get("from") and r.get("to"):
+                edges_data.append({
+                    "id":    i,
+                    "from":  r["from"],
+                    "to":    r["to"],
+                    "label": r.get("type", ""),
+                    "title": r.get("desc", ""),
+                })
+
+        nodes_js = json.dumps(nodes_data, ensure_ascii=False)
+        edges_js = json.dumps(edges_data, ensure_ascii=False)
+
+        html = f"""<!DOCTYPE html><html><head>
 <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
 <style>
-  body {{ margin:0; background:#16161e; }}
-  #net {{ width:100%; height:390px; }}
+  body {{ margin:0; background:#0e0e13; overflow:hidden; }}
+  #net {{ width:100%; height:420px; }}
+  .vis-tooltip {{
+    background:#1e1e2e !important; color:#eeeaf8 !important;
+    border:1px solid #8b5cf6 !important; border-radius:8px !important;
+    padding:6px 10px !important; font-size:12px !important;
+    white-space:pre-line !important;
+  }}
 </style>
 </head><body>
 <div id="net"></div>
@@ -2416,24 +2457,34 @@ def render_relationship_network(idea: dict):
   var edges = new vis.DataSet({edges_js});
   var options = {{
     nodes: {{
-      color: {{ background:"#8b5cf6", border:"#6d28d9", highlight:{{background:"#a78bfa",border:"#8b5cf6"}} }},
-      font:  {{ color:"#eeeaf8", size:14 }},
-      shape: "dot", size:18
+      font:  {{ color:"#eeeaf8", size:15, face:"sans-serif" }},
+      shape: "ellipse",
+      size:  28,
+      borderWidth: 2,
+      shadow: {{ enabled:true, color:"rgba(139,92,246,0.4)", size:8 }}
     }},
     edges: {{
-      color: {{ color:"#a78bfa", highlight:"#c4b5fd" }},
-      font:  {{ color:"#c4c0d9", size:12, align:"middle" }},
+      color:  {{ color:"#7c3aed", highlight:"#c4b5fd", opacity:0.85 }},
+      font:   {{ color:"#c4c0d9", size:12, align:"middle",
+                 background:"rgba(14,14,19,0.75)", strokeWidth:0 }},
       arrows: {{ to:{{ enabled:false }} }},
-      smooth: {{ type:"curvedCW", roundness:0.2 }}
+      smooth: {{ type:"dynamic" }},
+      width:  2,
+      selectionWidth: 3
     }},
-    physics: {{ stabilization:{{ iterations:150 }} }},
-    background: {{ color:"#16161e" }}
+    physics: {{
+      solver: "forceAtlas2Based",
+      forceAtlas2Based: {{ gravitationalConstant:-60, springLength:140, springConstant:0.05, damping:0.6 }},
+      stabilization: {{ iterations:300, updateInterval:25 }}
+    }},
+    interaction: {{ hover:true, tooltipDelay:200, zoomView:true, dragView:true }},
+    layout: {{ improvedLayout:true }}
   }};
-  new vis.Network(document.getElementById("net"), {{nodes,edges}}, options);
+  var network = new vis.Network(document.getElementById("net"), {{nodes,edges}}, options);
+  network.on("stabilizationIterationsDone", function() {{ network.setOptions({{physics:{{enabled:false}}}}); }});
 </script>
-</body></html>
-"""
-        components.html(html, height=400)
+</body></html>"""
+        components.html(html, height=430)
 
     # ── Relationship list with edit/delete ──
     st.markdown("---")
@@ -2975,11 +3026,28 @@ def _process_literature_response(idea: dict):
         display = {}
         if parsed:
             if parsed.get("outline"):
-                # Preserve character_relationships (managed manually, not by AI)
-                cr = idea.get("outline", {}).get("character_relationships", [])
+                old_outline = idea.get("outline", {})
+                # 1. 始终保留手动管理的关系网
+                cr = old_outline.get("character_relationships", [])
+                # 2. 合并角色：AI 只认识它引导出的角色，手动添加的不能丢
+                old_chars  = old_outline.get("characters", [])
                 idea["outline"] = parsed["outline"]
-                if not idea["outline"].get("character_relationships"):
-                    idea["outline"]["character_relationships"] = cr
+                idea["outline"]["character_relationships"] = cr
+                ai_chars   = idea["outline"].get("characters", [])
+                ai_names   = {c.get("name", "") for c in ai_chars if c.get("name")}
+                # 追加 AI 不认识的手动角色
+                for old_c in old_chars:
+                    if old_c.get("name") and old_c["name"] not in ai_names:
+                        ai_chars.append(old_c)
+                # 对 AI 已知角色保留用户填写的 gender / inventory
+                old_by_name = {c.get("name",""): c for c in old_chars}
+                for c in ai_chars:
+                    prev = old_by_name.get(c.get("name",""), {})
+                    if prev.get("gender")    and not c.get("gender"):
+                        c["gender"]    = prev["gender"]
+                    if prev.get("inventory") and not c.get("inventory"):
+                        c["inventory"] = prev["inventory"]
+                idea["outline"]["characters"] = ai_chars
             if "completeness" in parsed: idea["completeness"] = int(parsed.get("completeness", 0))
             analysis = parsed.get("analysis", "")
             question = parsed.get("question")
