@@ -1758,11 +1758,16 @@ def gen_world_references(idea: dict, extra_context: str = "") -> tuple[list, str
         "- 绝对不要复述用户故事里已有的设定，那些作者早就知道了\n"
         "- 提供作者可能不知道、但对写好这个背景极有价值的真实外部知识\n"
         "- 内容要有深度：具体历史事件、真实科学数据、实际社会规律、冷僻但有趣的细节\n\n"
-        "【分类规范】请严格使用以下分类名（根据故事背景选取适合的分类）：\n"
-        "历史事件、社会学、病理学、心理学、生态学、经济学、物理学、生物学、\n"
-        "道教修炼、道教典籍、炼丹术、神话传说、修真体系、\n"
-        "末世社会、辐射影响、军事战术、建筑防御、\n"
-        "天文学、地质学、气象学\n\n"
+        "【分类规范】请严格使用以下分类名（根据故事背景选取适合的3-6个分类，禁止自创新分类名）：\n"
+        "历史事件、社会与经济、病理与医学、心理学、生态与环境、\n"
+        "道教与修炼、神话传说、\n"
+        "末世与废土、军事与防御、\n"
+        "未来科技、天文地质\n\n"
+        "【合并规则】道教修炼/道教典籍/炼丹术/修炼细节/修真体系 → 统一用「道教与修炼」；"
+        "末世社会/辐射影响/废土生存 → 统一用「末世与废土」；"
+        "军事战术/建筑防御/战争 → 统一用「军事与防御」；"
+        "社会学/经济学/历史政治 → 用「社会与经济」或「历史事件」；"
+        "未来科技/病毒技术/AI/基因 → 统一用「未来科技」\n\n"
         "【参考维度】\n"
         "末日/废土：历史社会崩溃案例的具体细节、真实传染病学数据（R0/潜伏期）、"
         "灾后幸存者心理创伤研究、辐射/污染对生态的实际影响、历史迁徙与自组织案例\n"
@@ -2913,6 +2918,42 @@ def _workspace_literature(idea: dict):
             if not _refs_data:
                 st.info("点击上方按钮，AI 将根据你的世界观生成专属参考资料。")
             else:
+                # ── 类别合并映射（防止AI生成过细的子分类）──
+                _CAT_MERGE = {
+                    "道教修炼": "道教与修炼", "道教典籍": "道教与修炼",
+                    "炼丹术": "道教与修炼",   "修炼细节": "道教与修炼",
+                    "修真体系": "道教与修炼",  "修仙体系": "道教与修炼",
+                    "末世社会": "末世与废土",  "辐射影响": "末世与废土",
+                    "废土生存": "末世与废土",  "末日生存": "末世与废土",
+                    "军事战术": "军事与防御",  "建筑防御": "军事与防御",
+                    "战争策略": "军事与防御",
+                    "社会学": "社会与经济",    "经济学": "社会与经济",
+                    "历史政治": "历史事件",
+                    "生态学": "生态与环境",    "地质学": "天文地质",
+                    "天文学": "天文地质",       "气象学": "天文地质",
+                    "物理学": "未来科技",       "生物学": "病理与医学",
+                    "病理学": "病理与医学",
+                    "神话": "神话传说",
+                }
+                # ── 先规范化 refs_data（把细分类合并成大类，原地更新存储）──
+                _normalized_data = []
+                _seen_n = set()
+                for _item in _refs_data:
+                    _mn = re.match(r"^【(.+?)】(.+)$", str(_item))
+                    if _mn:
+                        _ncat = _CAT_MERGE.get(_mn.group(1), _mn.group(1))
+                        _nitem = f"【{_ncat}】{_mn.group(2)}"
+                    else:
+                        _nitem = _item
+                    if _nitem not in _seen_n:
+                        _seen_n.add(_nitem)
+                        _normalized_data.append(_nitem)
+                if _normalized_data != _refs_data:
+                    _refs_data = _normalized_data
+                    _outline_r["references"] = _refs_data
+                    idea["outline"] = _outline_r
+                    save_idea(idea)
+
                 # ── 按【分类】分组 ──
                 _groups: dict[str, list] = {}
                 _ungrouped = []
@@ -2926,8 +2967,7 @@ def _workspace_literature(idea: dict):
                     _groups["其他"] = _ungrouped
 
                 for _cat, _items in _groups.items():
-                    with st.container(border=True):
-                        st.markdown(f"**{_cat}**")
+                    with st.expander(f"**{_cat}**　`{len(_items)} 条`", expanded=False):
                         for _item in list(_items):
                             _ic1, _ic2 = st.columns([11, 1])
                             with _ic1:
