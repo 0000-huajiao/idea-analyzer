@@ -522,6 +522,31 @@ with st.sidebar:
         st.warning("⚠️ 请填写 API Key")
 
     st.markdown("---")
+    st.markdown("**🔍 搜索增强（可选）**")
+    st.caption("配置后可用于参考资料生成和竞品分析，非火山引擎用户也能享受联网搜索")
+    _search_providers = ["不使用", "Tavily", "Serper（Google）", "Brave Search"]
+    _saved_sp = st.session_state.get("search_provider", "不使用")
+    _sel_sp = st.selectbox("搜索服务商", _search_providers,
+                           index=_search_providers.index(_saved_sp) if _saved_sp in _search_providers else 0,
+                           key="_sel_search_provider")
+    st.session_state.search_provider = _sel_sp
+    if _sel_sp != "不使用":
+        _sp_links = {
+            "Tavily":        "https://app.tavily.com",
+            "Serper（Google）": "https://serper.dev",
+            "Brave Search":  "https://api.search.brave.com",
+        }
+        st.caption(f"获取 Key：{_sp_links.get(_sel_sp, '')}")
+        _search_key = st.text_input("搜索 API Key", type="password",
+                                    value=st.session_state.get("search_key", ""),
+                                    placeholder="tvly-xxx / sk-xxx / BSA-xxx",
+                                    key="_search_key_input")
+        if _search_key:
+            st.session_state.search_key = _search_key
+        if st.session_state.get("search_key"):
+            st.success(f"✅ {_sel_sp} 已配置")
+
+    st.markdown("---")
     st.markdown("**💾 数据备份**")
     st.caption("数据自动保存到本地文件，重启后自动恢复。")
 
@@ -948,11 +973,74 @@ def get_model() -> str:
     return st.session_state.get("cfg_model", "gpt-4o")
 
 def can_websearch() -> bool:
-    """联网搜索仅火山引擎 Ark 平台支持，需同时开启开关且使用 Ark 地址。"""
+    """火山引擎 Ark 原生联网搜索（需开关+Ark域名）。"""
     return (
         st.session_state.get("cfg_websearch", False)
         and "volces.com" in st.session_state.get("cfg_base", "")
     )
+
+def has_search_api() -> bool:
+    """是否配置了独立搜索 API。"""
+    return (
+        st.session_state.get("search_provider", "不使用") != "不使用"
+        and bool(st.session_state.get("search_key", ""))
+    )
+
+def search_web(query: str, n: int = 8) -> str:
+    """调用配置的搜索 API，返回搜索结果摘要字符串。"""
+    provider = st.session_state.get("search_provider", "不使用")
+    key      = st.session_state.get("search_key", "")
+    if not key:
+        return ""
+    try:
+        with httpx.Client(timeout=20.0) as client:
+            if provider == "Tavily":
+                r = client.post(
+                    "https://api.tavily.com/search",
+                    json={"api_key": key, "query": query, "max_results": n,
+                          "search_depth": "basic", "include_answer": True},
+                )
+                r.raise_for_status()
+                data = r.json()
+                parts = []
+                if data.get("answer"):
+                    parts.append(f"摘要：{data['answer']}")
+                for item in data.get("results", [])[:n]:
+                    parts.append(f"• {item.get('title','')}: {item.get('content','')[:200]}")
+                return "\n".join(parts)
+
+            elif provider == "Serper（Google）":
+                r = client.post(
+                    "https://google.serper.dev/search",
+                    headers={"X-API-KEY": key, "Content-Type": "application/json"},
+                    json={"q": query, "num": n, "hl": "zh-cn"},
+                )
+                r.raise_for_status()
+                data = r.json()
+                parts = []
+                if data.get("answerBox", {}).get("answer"):
+                    parts.append(f"摘要：{data['answerBox']['answer']}")
+                for item in data.get("organic", [])[:n]:
+                    parts.append(f"• {item.get('title','')}: {item.get('snippet','')}")
+                return "\n".join(parts)
+
+            elif provider == "Brave Search":
+                r = client.get(
+                    "https://api.search.brave.com/res/v1/web/search",
+                    headers={"Accept": "application/json",
+                             "Accept-Encoding": "gzip",
+                             "X-Subscription-Token": key},
+                    params={"q": query, "count": n, "search_lang": "zh"},
+                )
+                r.raise_for_status()
+                data = r.json()
+                parts = []
+                for item in data.get("web", {}).get("results", [])[:n]:
+                    parts.append(f"• {item.get('title','')}: {item.get('description','')}")
+                return "\n".join(parts)
+    except Exception as e:
+        return f"[搜索失败：{e}]"
+    return ""
 
 def call_api(messages: list) -> str:
     client   = get_client()
@@ -1597,6 +1685,16 @@ def gen_competitor(idea: dict) -> tuple[dict, str]:
                 instructions=COMPETITOR_PROMPT,
                 user_input=f"请联网搜索并分析以下产品的竞品：\n\n{prd_text}",
             )
+        elif has_search_api():
+            title = idea.get("title", "该产品")
+            search_results = search_web(f"{title} 竞品 同类产品 市场分析")
+            augmented = f"请分析以下产品的竞品情况：\n\n{prd_text}"
+            if search_results and not search_results.startswith("[搜索失败"):
+                augmented += f"\n\n联网搜索参考资料：\n{search_results}"
+            raw = call_api([
+                {"role": "system", "content": COMPETITOR_PROMPT},
+                {"role": "user",   "content": augmented},
+            ])
         else:
             raw = call_api([
                 {"role": "system", "content": COMPETITOR_PROMPT},
@@ -1652,7 +1750,19 @@ def gen_world_references(idea: dict, extra_context: str = "") -> tuple[list, str
 
     try:
         if can_websearch():
+            # 火山引擎原生联网
             raw = call_responses_api(instructions=instructions, user_input=user_msg)
+        elif has_search_api():
+            # 独立搜索 API：先搜索，再交给 LLM 整理
+            search_query = f"{genre} {world} {extra_context} 专有名词 背景知识".strip()
+            search_results = search_web(search_query)
+            augmented_msg  = user_msg
+            if search_results and not search_results.startswith("[搜索失败"):
+                augmented_msg += f"\n\n以下是联网搜索到的相关资料，请参考并整理成词条：\n{search_results}"
+            raw = call_api([
+                {"role": "system", "content": instructions},
+                {"role": "user",   "content": augmented_msg},
+            ])
         else:
             raw = call_api([
                 {"role": "system", "content": instructions},
@@ -2671,9 +2781,11 @@ def _workspace_literature(idea: dict):
 
             st.markdown("#### 🌍 世界观参考资料")
             if can_websearch():
-                st.caption("🔍 已启用联网搜索，将基于真实资料生成精准词条。")
+                st.caption("🔍 火山引擎联网搜索已启用，将基于实时资料生成精准词条。")
+            elif has_search_api():
+                st.caption(f"🔍 {st.session_state.get('search_provider','')} 搜索已启用，将先联网检索再整理词条。")
             else:
-                st.caption("💡 切换到火山引擎 Ark 并开启「联网搜索」可获得更精准的参考资料，当前使用AI训练知识。")
+                st.caption("💡 在侧边栏配置搜索 API（Tavily/Serper/Brave）可获得更精准的参考资料，当前使用AI训练知识。")
 
             with st.container(border=True):
                 if _is_ancient:
