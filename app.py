@@ -1753,32 +1753,56 @@ def gen_world_references(idea: dict, extra_context: str = "") -> tuple[list, str
     logline = outline.get("logline", "")
 
     instructions = (
-        "你是专业的创作素材整理师。根据用户的故事世界观，"
-        "生成15-20条实用的背景参考资料。\n"
-        "输出格式：每条占一行，格式为「【分类】词条：解释」，解释控制在60字以内。\n"
-        "分类规则：\n"
-        "- 科幻/未来背景：相关现代科学术语、物理/生物/技术概念\n"
-        "- 古代/历史背景：对应朝代的历史事件、政治制度、文化习俗、官职体系\n"
-        "- 修仙/玄幻背景：道教/佛教典籍中的真实术语、古代修炼文化\n"
-        "- 末日/废土背景：灾难学、社会学、生存相关概念\n"
-        "- 其他类型：该背景最相关的专业领域知识\n"
-        "直接输出条目列表，不要任何前缀说明文字，不要编号，不要代码块。"
+        "你是专业的创作顾问，专门为小说作者提供真实的背景研究资料。\n\n"
+        "【核心原则】\n"
+        "- 绝对不要复述用户故事里已有的设定，那些作者早就知道了\n"
+        "- 要提供作者可能不知道、但对写好这个背景极有价值的真实外部知识\n"
+        "- 内容要有深度：具体的历史事件、真实的科学数据、实际的社会规律、冷僻但有趣的细节\n\n"
+        "【不同背景对应的参考维度】\n"
+        "末日/废土背景：\n"
+        "  真实历史上的社会崩溃案例（如罗马帝国、柬埔寨、苏联解体）的具体过程\n"
+        "  传染病学中的R0值/潜伏期/传播链等实际概念\n"
+        "  灾后幸存者的真实心理创伤研究（PTSD、幸存者内疚等临床数据）\n"
+        "  历史上人类大规模迁徙、物资短缺时真实发生的社会现象\n"
+        "  实际的辐射/病毒/化学污染对人体/环境的科学影响\n"
+        "修仙/玄幻背景：\n"
+        "  道教典籍（《道德经》《抱朴子》《黄庭经》）中的真实原文引用和具体含义\n"
+        "  历史上真实存在的道家修炼方法（辟谷、胎息、内丹术）的实际操作细节\n"
+        "  中国古代真实的山川地理、洞天福地的历史记载\n"
+        "  古代炼丹术的真实化学反应和历史事故\n"
+        "科幻/未来背景：\n"
+        "  前沿科学论文中的具体数据和发现（附年份和研究机构）\n"
+        "  科幻设定在现实中的技术可行性分析\n"
+        "  太空/基因/AI等领域真实发生的里程碑事件\n"
+        "古代/历史背景：\n"
+        "  该朝代真实的政治事件、权力斗争、经济制度的具体细节\n"
+        "  当时普通人的衣食住行、物价水平、生活细节\n"
+        "  真实存在的历史人物和他们鲜为人知的一面\n\n"
+        "【输出格式】每条占一行：【分类】词条：具体解释（80字以内，要有细节，不要废话）\n"
+        "生成15-20条。直接输出，不要前缀、编号、代码块。"
     )
     user_msg = f"故事背景：\n- 类型与风格：{genre}\n- 世界观：{world}\n- 故事核心：{logline}"
     if extra_context:
-        user_msg += f"\n- 补充说明：{extra_context}"
+        user_msg += f"\n- 作者补充说明：{extra_context}"
+    user_msg += "\n\n请根据以上背景，给出真正有价值的外部参考知识，帮助作者把这个世界写得更真实、更有说服力。"
 
     try:
         if can_websearch():
             # 火山引擎原生联网
             raw = call_responses_api(instructions=instructions, user_input=user_msg)
         elif has_search_api():
-            # 独立搜索 API：先搜索，再交给 LLM 整理
-            search_query = f"{genre} {world} {extra_context} 专有名词 背景知识".strip()
-            search_results = search_web(search_query)
-            augmented_msg  = user_msg
+            # 独立搜索 API：构建更精准的搜索词，先搜索再整理
+            _kw = extra_context or f"{genre} {world}"
+            search_queries = [
+                f"{_kw} 历史真实案例",
+                f"{_kw} 科学研究 数据",
+            ]
+            search_results = "\n".join(
+                search_web(q, n=5) for q in search_queries
+            ).strip()
+            augmented_msg = user_msg
             if search_results and not search_results.startswith("[搜索失败"):
-                augmented_msg += f"\n\n以下是联网搜索到的相关资料，请参考并整理成词条：\n{search_results}"
+                augmented_msg += f"\n\n【联网搜索结果，请从中提炼有价值的细节】\n{search_results}"
             raw = call_api([
                 {"role": "system", "content": instructions},
                 {"role": "user",   "content": augmented_msg},
