@@ -3055,24 +3055,17 @@ def _process_literature_response(idea: dict):
                 idea["outline"]["character_relationships"] = cr
                 ai_chars   = idea["outline"].get("characters", [])
                 old_by_name = {c.get("name",""): c for c in old_chars if c.get("name")}
-                old_by_role = {}
-                for c in old_chars:
-                    role = (c.get("role") or "").strip()
-                    if role and c.get("name"):
-                        old_by_role[role] = c
-                # 占位名：AI 用这些名字表示"还不知道叫啥"
+                # 占位名：AI 用这些名字表示"还不知道叫啥"，用户已有角色时直接丢弃
                 _placeholders = {"", "主角", "男主", "女主", "主人公", "未命名",
                                  "（未命名）", "配角", "反派", "男主角", "女主角"}
                 merged = []
                 for ai_c in ai_chars:
                     ai_name = (ai_c.get("name") or "").strip()
-                    ai_role = (ai_c.get("role") or "").strip()
-                    # AI 给的是占位名 → 看用户是否已有同角色的命名角色，有则跳过 AI 版本
-                    if ai_name in _placeholders:
-                        if ai_role in old_by_role or any(ai_name == c.get("name","") for c in old_chars):
-                            continue
+                    # 占位名且用户已有角色 → 直接跳过（不按 role 去重，允许多主角）
+                    if ai_name in _placeholders and old_chars:
+                        continue
                     # 正常角色：保留用户填的 gender/inventory
-                    prev = old_by_name.get(ai_name, old_by_role.get(ai_role, {}))
+                    prev = old_by_name.get(ai_name, {})
                     if prev.get("gender")    and not ai_c.get("gender"):
                         ai_c["gender"]    = prev["gender"]
                     if prev.get("inventory") and not ai_c.get("inventory"):
