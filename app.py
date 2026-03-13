@@ -2338,9 +2338,29 @@ def render_character_profiles(idea: dict):
                 if c.get("inventory"):   st.markdown(f"**物品栏：** {c['inventory']}")
 
         st.markdown("")
-        if st.button("＋ 添加人物", type="primary"):
-            st.session_state[f"char_edit_idx_{iid}"] = -2
-            st.rerun()
+        ca_btn, cb_btn = st.columns(2)
+        with ca_btn:
+            if st.button("＋ 添加人物", type="primary", use_container_width=True):
+                st.session_state[f"char_edit_idx_{iid}"] = -2
+                st.rerun()
+        with cb_btn:
+            if st.button("🔄 同步到AI", use_container_width=True,
+                         help="将当前人物档案告知AI，让AI在后续对话中正确引用"):
+                if chars:
+                    _char_summary = "\n".join(
+                        f"- {c.get('name','')}（{c.get('gender','')}{' · ' if c.get('gender') and c.get('role') else ''}{c.get('role','')}）"
+                        f"{'：' + c.get('personality','') if c.get('personality') else ''}"
+                        for c in chars if c.get("name")
+                    )
+                    _sync_msg = (
+                        f"[系统通知：用户已在人物档案中手动更新以下角色，请以此为准，后续对话中不要再创建重名或占位角色]\n{_char_summary}"
+                    )
+                    idea["messages"].append({"role": "user", "content": _sync_msg})
+                    st.session_state.processing = True
+                    save_idea(idea)
+                    st.rerun()
+                else:
+                    st.toast("还没有人物，先添加再同步")
     else:
         # Edit / new form
         is_new = (edit_idx == -2)
@@ -3034,20 +3054,36 @@ def _process_literature_response(idea: dict):
                 idea["outline"] = parsed["outline"]
                 idea["outline"]["character_relationships"] = cr
                 ai_chars   = idea["outline"].get("characters", [])
-                ai_names   = {c.get("name", "") for c in ai_chars if c.get("name")}
-                # 追加 AI 不认识的手动角色
+                old_by_name = {c.get("name",""): c for c in old_chars if c.get("name")}
+                old_by_role = {}
+                for c in old_chars:
+                    role = (c.get("role") or "").strip()
+                    if role and c.get("name"):
+                        old_by_role[role] = c
+                # 占位名：AI 用这些名字表示"还不知道叫啥"
+                _placeholders = {"", "主角", "男主", "女主", "主人公", "未命名",
+                                 "（未命名）", "配角", "反派", "男主角", "女主角"}
+                merged = []
+                for ai_c in ai_chars:
+                    ai_name = (ai_c.get("name") or "").strip()
+                    ai_role = (ai_c.get("role") or "").strip()
+                    # AI 给的是占位名 → 看用户是否已有同角色的命名角色，有则跳过 AI 版本
+                    if ai_name in _placeholders:
+                        if ai_role in old_by_role or any(ai_name == c.get("name","") for c in old_chars):
+                            continue
+                    # 正常角色：保留用户填的 gender/inventory
+                    prev = old_by_name.get(ai_name, old_by_role.get(ai_role, {}))
+                    if prev.get("gender")    and not ai_c.get("gender"):
+                        ai_c["gender"]    = prev["gender"]
+                    if prev.get("inventory") and not ai_c.get("inventory"):
+                        ai_c["inventory"] = prev["inventory"]
+                    merged.append(ai_c)
+                # 追加用户手动添加、AI 完全不知道的角色
+                merged_names = {c.get("name","") for c in merged}
                 for old_c in old_chars:
-                    if old_c.get("name") and old_c["name"] not in ai_names:
-                        ai_chars.append(old_c)
-                # 对 AI 已知角色保留用户填写的 gender / inventory
-                old_by_name = {c.get("name",""): c for c in old_chars}
-                for c in ai_chars:
-                    prev = old_by_name.get(c.get("name",""), {})
-                    if prev.get("gender")    and not c.get("gender"):
-                        c["gender"]    = prev["gender"]
-                    if prev.get("inventory") and not c.get("inventory"):
-                        c["inventory"] = prev["inventory"]
-                idea["outline"]["characters"] = ai_chars
+                    if old_c.get("name") and old_c["name"] not in merged_names:
+                        merged.append(old_c)
+                idea["outline"]["characters"] = merged
             if "completeness" in parsed: idea["completeness"] = int(parsed.get("completeness", 0))
             analysis = parsed.get("analysis", "")
             question = parsed.get("question")
