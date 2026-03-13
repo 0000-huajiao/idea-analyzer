@@ -408,17 +408,86 @@ h4, h5, h6 { color: #9b87d1 !important; }
 </style>
 """, unsafe_allow_html=True)
 
+# ─── 预设服务商列表 ────────────────────────────────────────────────────────────
+_PROVIDERS = {
+    "🔥 豆包（火山引擎 Ark）": {
+        "url":    "https://ark.cn-beijing.volces.com/api/v3",
+        "models": ["doubao-seed-2-0-pro-260215", "doubao-pro-32k", "doubao-lite-32k"],
+        "note":   "支持联网搜索插件",
+    },
+    "🤖 DeepSeek": {
+        "url":    "https://api.deepseek.com/v1",
+        "models": ["deepseek-chat", "deepseek-reasoner"],
+        "note":   "",
+    },
+    "🟢 OpenAI": {
+        "url":    "https://api.openai.com/v1",
+        "models": ["gpt-4o", "gpt-4o-mini", "o3-mini"],
+        "note":   "",
+    },
+    "💎 Gemini": {
+        "url":    "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "models": ["gemini-2.0-flash", "gemini-2.5-pro-preview-03-25"],
+        "note":   "通过 OpenAI 兼容接口",
+    },
+    "🌙 月之暗面（Moonshot）": {
+        "url":    "https://api.moonshot.cn/v1",
+        "models": ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"],
+        "note":   "",
+    },
+    "🧠 智谱 AI（GLM）": {
+        "url":    "https://open.bigmodel.cn/api/paas/v4",
+        "models": ["glm-4", "glm-4-flash", "glm-z1-flash"],
+        "note":   "",
+    },
+    "☁️ 阿里云百炼（Qwen）": {
+        "url":    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "models": ["qwen-max", "qwen-plus", "qwen-turbo"],
+        "note":   "",
+    },
+    "⚙️ 自定义": {
+        "url":    "",
+        "models": [],
+        "note":   "",
+    },
+}
+
 # ─── Sidebar: API 配置 ────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("⚙️ API 配置")
-    st.caption("支持任何 OpenAI 兼容格式的 API")
 
-    cfg_base = st.text_input(
-        "API 请求地址",
-        value=st.session_state.get("cfg_base", "https://ark.cn-beijing.volces.com/api/v3"),
-        placeholder="https://api.openai.com/v1",
-        help="填写你的 API Endpoint，需兼容 OpenAI Chat Completions 格式",
+    _provider_names = list(_PROVIDERS.keys())
+    _saved_provider = st.session_state.get("cfg_provider", "🔥 豆包（火山引擎 Ark）")
+    if _saved_provider not in _provider_names:
+        _saved_provider = "⚙️ 自定义"
+
+    _sel_provider = st.selectbox(
+        "API 服务商",
+        _provider_names,
+        index=_provider_names.index(_saved_provider),
+        key="_sel_provider_widget",
     )
+    _pinfo = _PROVIDERS[_sel_provider]
+
+    # 切换服务商时自动更新请求地址和默认模型
+    if _sel_provider != st.session_state.get("cfg_provider"):
+        st.session_state.cfg_provider = _sel_provider
+        if _sel_provider != "⚙️ 自定义":
+            st.session_state.cfg_base  = _pinfo["url"]
+            st.session_state.cfg_model = _pinfo["models"][0] if _pinfo["models"] else ""
+
+    if _sel_provider == "⚙️ 自定义":
+        cfg_base = st.text_input(
+            "API 请求地址",
+            value=st.session_state.get("cfg_base", ""),
+            placeholder="https://your-api.example.com/v1",
+        )
+    else:
+        cfg_base = _pinfo["url"]
+        st.caption(f"`{cfg_base}`")
+        if _pinfo["note"]:
+            st.caption(f"💡 {_pinfo['note']}")
+
     cfg_key = st.text_input(
         "API Key",
         type="password",
@@ -427,27 +496,30 @@ with st.sidebar:
     )
     cfg_model = st.text_input(
         "模型名称",
-        value=st.session_state.get("cfg_model", "doubao-seed-2-0-pro-260215"),
-        help="填写对应平台的模型 ID，如 gpt-4o、doubao-seed-2-0-pro-260215 等",
+        value=st.session_state.get("cfg_model", _pinfo["models"][0] if _pinfo["models"] else ""),
+        help="填写对应平台的模型 ID",
     )
+    if _pinfo["models"]:
+        st.caption("常用：" + "　".join(_pinfo["models"]))
+
     cfg_websearch = st.checkbox(
-        "启用联网搜索（仅火山引擎 Ark 平台支持）",
+        "启用联网搜索（仅火山引擎 Ark 支持）",
         value=st.session_state.get("cfg_websearch", False),
         help="竞品分析时联网搜索，需在火山引擎控制台开通「联网内容插件」",
     )
 
     if cfg_base:
-        st.session_state.cfg_base      = cfg_base
+        st.session_state.cfg_base  = cfg_base
     if cfg_key:
-        st.session_state.cfg_key       = cfg_key
+        st.session_state.cfg_key   = cfg_key
     if cfg_model:
-        st.session_state.cfg_model     = cfg_model
+        st.session_state.cfg_model = cfg_model
     st.session_state.cfg_websearch = cfg_websearch
 
     if cfg_key and cfg_base:
         st.success("✅ 配置完成，可以开始使用")
     else:
-        st.warning("⚠️ 请填写 API 地址和 Key")
+        st.warning("⚠️ 请填写 API Key")
 
     st.markdown("---")
     st.markdown("**💾 数据备份**")
